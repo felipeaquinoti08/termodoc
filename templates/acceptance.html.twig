@@ -1,0 +1,42 @@
+{% import 'components/form/fields_macros.html.twig' as fields %}
+
+<div class="termodocs-acceptance card m-3">
+    <div class="card-body">
+        <h3>{{ document.fields.name }}</h3>
+
+        <iframe class="termodocs-preview-frame" style="width:100%;min-height:65vh;border:1px solid #dee2e6"
+            srcdoc="{{ ('<style>' ~ document.fields.theme_css_snapshot ~ '</style>' ~ document.composeSignedHtml())|escape('html_attr') }}">
+        </iframe>
+
+        {% if can_act %}
+            <p class="text-muted mt-3 mb-1">{{ __('Assinando como', 'termodocs') }}: <strong>{{ my_role_label }}</strong></p>
+            <form method="post" action="{{ config('root_doc') }}/plugins/termodocs/front/acceptance.php" class="mt-2">
+                <input type="hidden" name="documents_id" value="{{ document.getID() }}">
+                {{ fields.csrfField() }}
+
+                <div class="mb-3">
+                    <label class="form-label">{{ __('Motivo (obrigatório apenas para recusar)', 'termodocs') }}</label>
+                    <textarea name="refusal_reason" class="form-control" rows="2"></textarea>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" name="accept" class="btn btn-success">
+                        <i class="ti ti-check"></i> {{ __('Li e concordo', 'termodocs') }}
+                    </button>
+                    <button type="submit" name="refuse" class="btn btn-outline-danger">
+                        <i class="ti ti-x"></i> {{ __('Recusar', 'termodocs') }}
+                    </button>
+                </div>
+            </form>
+        {% elseif waiting_other_party %}
+            <div class="alert alert-info mt-3">
+                {{ __('Você já assinou como', 'termodocs') }} <strong>{{ my_role_label }}</strong>.
+                {{ __('Aguardando a assinatura da outra parte para o documento ser finalizado.', 'termodocs') }}
+            </div>
+        {% else %}
+            <div class="alert alert-info mt-3">
+                {{ __('Este documento já foi finalizado; nenhuma ação adicional é necessária.', 'termodocs') }}
+            </div>
+        {% endif %}
+    </div>
+</div>
