@@ -488,6 +488,11 @@ class Document extends CommonDBTM
                 ->getLabel(),
             'recipient_signed'    => Acceptance::hasSigned((int) $ID, Acceptance::ROLE_RECIPIENT),
             'deliverer_signed'    => Acceptance::hasSigned((int) $ID, Acceptance::ROLE_DELIVERER),
+            // Gates the raw-payload "Diagnóstico" panel - the
+            // recipient/deliverer can already view this page themselves
+            // (see canViewItem()), but that technical detail is only
+            // useful to whoever administers the integration.
+            'is_admin'            => Session::haveRight(self::$rightname, READ),
         ]);
 
         return true;

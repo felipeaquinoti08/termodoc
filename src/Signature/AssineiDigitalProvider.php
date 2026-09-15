@@ -153,9 +153,13 @@ class AssineiDigitalProvider implements SignatureProviderInterface
             ?? $payload['nome']
             ?? ($participant_email ?? __('Desconhecido', 'termodocs'));
 
-        $role = $this->resolveRole($document, is_string($participant_email) ? $participant_email : null);
+        $role = $this->resolveRole(
+            $document,
+            is_string($participant_email) ? $participant_email : null,
+            is_string($participant_name) ? $participant_name : null
+        );
         if ($role === null) {
-            $this->logRaw("Webhook Assinei.digital: e-mail do participante ('{$participant_email}') não corresponde ao colaborador nem ao responsável de TI deste documento.", $payload);
+            $this->logRaw("Webhook Assinei.digital: participante ('{$participant_email}' / '{$participant_name}') não corresponde ao colaborador nem ao responsável de TI deste documento.", $payload);
             return;
         }
 
@@ -195,6 +199,17 @@ class AssineiDigitalProvider implements SignatureProviderInterface
             return 0;
         }
 
+        // Always stashed, whether or not anything actionable is found
+        // below - the exact field names Assinei's tenant returns for
+        // this call were never confirmed against a live signed document,
+        // so this is what makes that visible (see the "Diagnóstico"
+        // panel on the document's own page) without needing direct
+        // access to wherever this GLPI is actually deployed.
+        $document->update([
+            'id'               => $document->getID(),
+            'external_payload' => json_encode(['last_poll' => $response]),
+        ]);
+
         $data = $response['data'] ?? $response;
         $participants = $data['participantesDocumento'] ?? $data['participantes'] ?? [];
         if (!is_array($participants)) {
@@ -217,12 +232,17 @@ class AssineiDigitalProvider implements SignatureProviderInterface
                 continue;
             }
 
-            $role = $this->resolveRole($document, $email);
-            if ($role === null || Acceptance::hasSigned($document->getID(), $role)) {
+            $name = (string) ($p['participanteNome'] ?? $p['nome'] ?? ($email ?? __('Desconhecido', 'termodocs')));
+
+            $role = $this->resolveRole($document, $email, $name);
+            if ($role === null) {
+                $this->logRaw("Poll de status: participante ('{$email}' / '{$name}') não corresponde ao colaborador nem ao responsável de TI do documento #" . $document->getID() . '.', $p);
+                continue;
+            }
+            if (Acceptance::hasSigned($document->getID(), $role)) {
                 continue;
             }
 
-            $name = (string) ($p['participanteNome'] ?? $p['nome'] ?? ($email ?? __('Desconhecido', 'termodocs')));
             $users_id = $this->resolveUserByEmail($email);
 
             if ($refused) {
@@ -236,22 +256,40 @@ class AssineiDigitalProvider implements SignatureProviderInterface
         return $changed;
     }
 
-    private function resolveRole(Document $document, ?string $email): ?int
+    /**
+     * Matches by e-mail first, falling back to an exact name match when
+     * no e-mail is available - Assinei's status-check response
+     * (getStatus(), used by reconcile()) only documents `participanteNome`
+     * for each participant, no e-mail field, unlike the webhook payload's
+     * shape. Name matching is safe here specifically because the name on
+     * their side is never freely typed by the signer - it's exactly what
+     * initiate() sent as `participanteNome` in the first place
+     * ($recipient/$deliverer->getFriendlyName()), so it's an echo of our
+     * own data, not an independent identifier that could collide.
+     */
+    private function resolveRole(Document $document, ?string $email, ?string $name = null): ?int
     {
-        if ($email === null) {
-            return null;
-        }
-
         $recipient = new User();
         $recipient->getFromDB((int) $document->fields['users_id_recipient']);
-        if (strcasecmp((string) $recipient->getDefaultEmail(), $email) === 0) {
-            return Acceptance::ROLE_RECIPIENT;
-        }
-
         $deliverer = new User();
         $deliverer->getFromDB((int) $document->fields['users_id_deliverer']);
-        if (strcasecmp((string) $deliverer->getDefaultEmail(), $email) === 0) {
-            return Acceptance::ROLE_DELIVERER;
+
+        if ($email !== null) {
+            if (strcasecmp((string) $recipient->getDefaultEmail(), $email) === 0) {
+                return Acceptance::ROLE_RECIPIENT;
+            }
+            if (strcasecmp((string) $deliverer->getDefaultEmail(), $email) === 0) {
+                return Acceptance::ROLE_DELIVERER;
+            }
+        }
+
+        if ($name !== null && trim($name) !== '') {
+            if (strcasecmp(trim($recipient->getFriendlyName()), trim($name)) === 0) {
+                return Acceptance::ROLE_RECIPIENT;
+            }
+            if (strcasecmp(trim($deliverer->getFriendlyName()), trim($name)) === 0) {
+                return Acceptance::ROLE_DELIVERER;
+            }
         }
 
         return null;
