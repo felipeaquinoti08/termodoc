@@ -164,6 +164,21 @@ function plugin_termodocs_install_run(): bool
 
     import_termodocs_default_template();
 
+    // Runs via the dedicated cron container (MODE_EXTERNAL, not on every
+    // web request) - reconciles Assinei.digital documents whether or not
+    // the webhook ended up configured on their side. register() is
+    // idempotent: re-running install just updates the existing row
+    // rather than duplicating it.
+    CronTask::register(
+        \GlpiPlugin\Termodocs\Signature\AssineiPoller::class,
+        'CheckSignatures',
+        30 * MINUTE_TIMESTAMP,
+        [
+            'comment' => 'Verifica documentos pendentes de assinatura na Assinei.digital (alternativa/complemento ao webhook).',
+            'mode'    => CronTask::MODE_EXTERNAL,
+        ]
+    );
+
     return true;
 }
 

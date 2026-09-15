@@ -169,6 +169,73 @@ class AssineiDigitalProvider implements SignatureProviderInterface
         }
     }
 
+    /**
+     * Polling fallback/complement to the webhook (see AssineiPoller's
+     * cron task, "CheckSignatures") - checks GET
+     * /v1/DocumentoBusca/{id}/Status for a document still
+     * WAITING_ACCEPTANCE and records any participant's signature/refusal
+     * found there that GLPI doesn't already have. Reuses
+     * resolveRole()/resolveUserByEmail() below, the same matching
+     * handleCallback() uses, so both paths stay consistent. Safe to call
+     * repeatedly: Acceptance::accept/refuseExternal() are no-ops for a
+     * role that's already recorded. Returns how many roles were newly
+     * recorded on this call.
+     */
+    public function reconcile(Document $document): int
+    {
+        $external_reference = $document->fields['external_reference'] ?? null;
+        if (!is_string($external_reference) || $external_reference === '') {
+            return 0;
+        }
+
+        try {
+            $response = (new AssineiApiClient())->getStatus($external_reference);
+        } catch (AssineiApiException $e) {
+            $this->logRaw('Poll de status falhou para documento #' . $document->getID() . ': ' . $e->getMessage(), []);
+            return 0;
+        }
+
+        $data = $response['data'] ?? $response;
+        $participants = $data['participantesDocumento'] ?? $data['participantes'] ?? [];
+        if (!is_array($participants)) {
+            $this->logRaw('Poll de status: resposta sem lista de participantes reconhecível para documento #' . $document->getID() . '.', $response);
+            return 0;
+        }
+
+        $changed = 0;
+        foreach ($participants as $p) {
+            if (!is_array($p)) {
+                continue;
+            }
+
+            $email = $p['participanteEmail'] ?? $p['email'] ?? null;
+            $email = is_string($email) ? $email : null;
+
+            $signed = (bool) ($p['assinado'] ?? $p['assinou'] ?? false);
+            $refused = (bool) ($p['recusado'] ?? $p['recusou'] ?? false);
+            if (!$signed && !$refused) {
+                continue;
+            }
+
+            $role = $this->resolveRole($document, $email);
+            if ($role === null || Acceptance::hasSigned($document->getID(), $role)) {
+                continue;
+            }
+
+            $name = (string) ($p['participanteNome'] ?? $p['nome'] ?? ($email ?? __('Desconhecido', 'termodocs')));
+            $users_id = $this->resolveUserByEmail($email);
+
+            if ($refused) {
+                Acceptance::refuseExternal($document, $role, $users_id, $name, '', self::KEY, $external_reference, $data);
+            } else {
+                Acceptance::acceptExternal($document, $role, $users_id, $name, self::KEY, $external_reference, $data);
+            }
+            $changed++;
+        }
+
+        return $changed;
+    }
+
     private function resolveRole(Document $document, ?string $email): ?int
     {
         if ($email === null) {
