@@ -36,7 +36,7 @@
         {% elseif waiting_externally %}
             <div class="alert alert-info mt-3">
                 {{ __('Assinando como', 'termodocs') }} <strong>{{ my_role_label }}</strong>.
-                {{ __('A assinatura deste documento é feita fora do GLPI, através da Assinei.digital - verifique seu e-mail para o link de assinatura.', 'termodocs') }}
+                {{ __('A assinatura deste documento é feita fora do GLPI, através de', 'termodocs') }} {{ signature_provider_label }} - {{ __('verifique seu e-mail para o link de assinatura.', 'termodocs') }}
             </div>
         {% else %}
             <div class="alert alert-info mt-3">

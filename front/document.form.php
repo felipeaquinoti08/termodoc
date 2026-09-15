@@ -1,9 +1,11 @@
 <?php
 
+use GlpiPlugin\Termodocs\Acceptance;
 use GlpiPlugin\Termodocs\Document;
 use GlpiPlugin\Termodocs\DocumentGen\DocumentGenerator;
 use GlpiPlugin\Termodocs\DocumentTemplate;
 use GlpiPlugin\Termodocs\Menu;
+use GlpiPlugin\Termodocs\Signature\SignatureProviderManager;
 
 const TERMODOCS_MAX_WIZARD_ROWS = 8;
 
@@ -141,6 +143,55 @@ if (isset($_POST['do_generate'])) {
         ]);
     }
     Html::back();
+} elseif (isset($_POST['send_signature'])) {
+    // Deliberately gated the same as generating a document in the first
+    // place (CREATE), not just READ - picking a provider here can kick
+    // off a real external side effect (e-mails to the
+    // recipient/deliverer) that a plain viewer of the document
+    // shouldn't be able to trigger.
+    Session::checkRight(Document::$rightname, CREATE);
+
+    $document = new Document();
+    if (!$document->getFromDB((int) $_POST['id'])) {
+        Html::back();
+    }
+
+    // Only an already-known provider key is ever accepted - falls back
+    // to whatever the document already had rather than trusting an
+    // unrecognized value from the request.
+    $available_providers = SignatureProviderManager::getInstance()->getAvailableProviders();
+    $chosen_provider = (string) ($_POST['signature_provider'] ?? '');
+    if (!array_key_exists($chosen_provider, $available_providers)) {
+        $chosen_provider = $document->fields['signature_provider'] ?? SignatureProviderManager::INTERNAL;
+    }
+
+    // Re-checked here (not just in Document::showForm()'s
+    // can_choose_signature, which only controls whether the picker is
+    // shown) - status/acceptances could have changed since the page
+    // was rendered, e.g. two admins racing on the same document. Once
+    // either party has actually acted (an Acceptance row exists) or the
+    // document was already sent externally (external_reference set),
+    // the provider is locked - switching after that point could leave
+    // a signature already recorded under a provider the document no
+    // longer claims to use, or send a document to a second provider
+    // while it's still out for signature on the first one.
+    $not_yet_engaged = (int) $document->fields['status'] === Document::WAITING_ACCEPTANCE
+        && empty($document->fields['external_reference'])
+        && Acceptance::getForRole($document->getID(), Acceptance::ROLE_RECIPIENT) === null
+        && Acceptance::getForRole($document->getID(), Acceptance::ROLE_DELIVERER) === null;
+
+    if ($not_yet_engaged) {
+        if ($chosen_provider !== $document->fields['signature_provider']) {
+            $document->update(['id' => $document->getID(), 'signature_provider' => $chosen_provider]);
+            $document->getFromDB($document->getID());
+        }
+
+        if ($chosen_provider !== SignatureProviderManager::INTERNAL) {
+            SignatureProviderManager::getInstance()->resolve($chosen_provider)->initiate($document);
+        }
+    }
+
+    Html::redirect(Document::getFormURLWithID($document->getID()));
 } elseif (isset($_GET['generate']) && empty($_GET['operation_type'])) {
     // Step 0: which direction is this document for? Drives both which
     // assets can be picked next and how they get validated.

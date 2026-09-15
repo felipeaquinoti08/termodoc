@@ -177,12 +177,23 @@ class Document extends CommonDBTM
 
     public function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
     {
-        if (!self::canView()) {
-            return '';
+        if ($item instanceof Menu) {
+            if (!self::canView()) {
+                return '';
+            }
+            return self::createTabEntry(self::getTypeName(2), 0, $item::class, self::getIcon());
         }
 
-        if ($item instanceof Menu) {
-            return self::createTabEntry(self::getTypeName(2), 0, $item::class, self::getIcon());
+        if ($item instanceof User) {
+            if (!self::canViewUserTab($item)) {
+                return '';
+            }
+            $count = self::countForUser((int) $item->getID());
+            return self::createTabEntry(__('Documentos assinados', 'termodocs'), $count, $item::class, self::getIcon());
+        }
+
+        if (!self::canView()) {
+            return '';
         }
 
         global $DB;
@@ -228,10 +239,29 @@ class Document extends CommonDBTM
             return true;
         }
 
+        if ($item instanceof User) {
+            if (!self::canViewUserTab($item)) {
+                return false;
+            }
+
+            $documents = self::decorateForDisplay(self::getForUser((int) $item->getID()));
+
+            TemplateRenderer::getInstance()->display('@termodocs/document_tab.html.twig', [
+                'item'          => $item,
+                'documents'     => $documents,
+                'has_templates' => false,
+                'generate_url'  => null,
+                'can_create'    => false,
+                'empty_message' => __('Nenhum documento assinado ainda.', 'termodocs'),
+            ]);
+
+            return true;
+        }
+
         global $DB;
 
         $documents = [];
-        $iterator = $DB->request([
+        foreach ($DB->request([
             'SELECT' => [self::getTable() . '.*'],
             'FROM'   => self::getTable(),
             'INNER JOIN' => [
@@ -248,7 +278,10 @@ class Document extends CommonDBTM
                 self::getTable() . '.is_deleted'         => 0,
             ],
             'ORDER' => self::getTable() . '.date_creation DESC',
-        ]);
+        ]) as $row) {
+            $documents[] = $row;
+        }
+        $documents = self::decorateForDisplay($documents);
 
         $eligible_templates = [];
         foreach ((new DocumentTemplate())->find(['is_active' => 1, 'is_deleted' => 0]) as $id => $row) {
@@ -257,13 +290,6 @@ class Document extends CommonDBTM
                 $eligible_templates[$id] = $row;
             }
         }
-
-        foreach ($documents as &$row) {
-            $row['view_url']   = self::getFormURLWithID((int) $row['id']);
-            $row['status_label'] = self::getStatusLabel((int) $row['status']);
-            $row['status_class'] = self::getStatusBadgeClass((int) $row['status']);
-        }
-        unset($row);
 
         TemplateRenderer::getInstance()->display('@termodocs/document_tab.html.twig', [
             'item'               => $item,
@@ -274,6 +300,72 @@ class Document extends CommonDBTM
         ]);
 
         return true;
+    }
+
+    /**
+     * A user sees their own signed-documents tab regardless of the
+     * admin-only plugin:termodocs:document right, same self-service
+     * carve-out as canViewItem() for a single document - otherwise
+     * employees without that right could never see their own tab on
+     * their own profile.
+     */
+    private static function canViewUserTab(User $item): bool
+    {
+        return Session::haveRight(self::$rightname, READ) || (int) $item->getID() === Session::getLoginUserID();
+    }
+
+    private static function countForUser(int $users_id): int
+    {
+        global $DB;
+        return $DB->request([
+            'COUNT'  => 'c',
+            'FROM'   => self::getTable(),
+            'WHERE'  => [
+                'OR' => [
+                    'users_id_recipient' => $users_id,
+                    'users_id_deliverer' => $users_id,
+                ],
+                'is_deleted' => 0,
+            ],
+        ])->current()['c'] ?? 0;
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    private static function getForUser(int $users_id): array
+    {
+        global $DB;
+        $documents = [];
+        foreach ($DB->request([
+            'FROM'  => self::getTable(),
+            'WHERE' => [
+                'OR' => [
+                    'users_id_recipient' => $users_id,
+                    'users_id_deliverer' => $users_id,
+                ],
+                'is_deleted' => 0,
+            ],
+            'ORDER' => 'date_creation DESC',
+        ]) as $row) {
+            $documents[] = $row;
+        }
+        return $documents;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $documents
+     * @return array<int,array<string,mixed>>
+     */
+    private static function decorateForDisplay(array $documents): array
+    {
+        foreach ($documents as &$row) {
+            $row['view_url']     = self::getFormURLWithID((int) $row['id']);
+            $row['status_label'] = self::getStatusLabel((int) $row['status']);
+            $row['status_class'] = self::getStatusBadgeClass((int) $row['status']);
+        }
+        unset($row);
+        return $documents;
     }
 
     public static function onAssetPurge(CommonDBTM $item): void
@@ -360,6 +452,21 @@ class Document extends CommonDBTM
         $my_acceptance = $my_role !== null ? Acceptance::getForRole((int) $ID, $my_role) : null;
         $is_waiting = (int) $this->fields['status'] === self::WAITING_ACCEPTANCE;
 
+        // The signature provider (internal vs. Assinei.digital vs. any
+        // other one registered later) stays a free choice - made or
+        // changed from the document's own page, see
+        // front/document.form.php's send_signature action - for as long
+        // as nothing has actually happened on it yet: no acceptance
+        // recorded for either role, and never sent to an external
+        // provider. Past that point it's locked, so switching can't
+        // strand a signature already recorded under a provider the
+        // document no longer claims, or send it to a second provider
+        // while it's still out for signature on the first one.
+        $not_yet_engaged = $is_waiting
+            && empty($this->fields['external_reference'])
+            && Acceptance::getForRole((int) $ID, Acceptance::ROLE_RECIPIENT) === null
+            && Acceptance::getForRole((int) $ID, Acceptance::ROLE_DELIVERER) === null;
+
         TemplateRenderer::getInstance()->display('@termodocs/document_form.html.twig', [
             'item'                => $this,
             'items'               => $items,
@@ -373,6 +480,12 @@ class Document extends CommonDBTM
             'can_accept'          => $my_role !== null && $my_acceptance === null && $is_waiting && !$this->isExternallySigned(),
             'waiting_other_party' => $my_acceptance !== null && $is_waiting,
             'waiting_externally'  => $my_role !== null && $my_acceptance === null && $is_waiting && $this->isExternallySigned(),
+            'can_choose_signature' => self::canCreate() && $not_yet_engaged,
+            'available_providers' => SignatureProviderManager::getInstance()->getAvailableProviders(),
+            'current_provider_key' => $this->fields['signature_provider'] ?? SignatureProviderManager::INTERNAL,
+            'signature_provider_label' => SignatureProviderManager::getInstance()
+                ->resolve($this->fields['signature_provider'] ?? SignatureProviderManager::INTERNAL)
+                ->getLabel(),
             'recipient_signed'    => Acceptance::hasSigned((int) $ID, Acceptance::ROLE_RECIPIENT),
             'deliverer_signed'    => Acceptance::hasSigned((int) $ID, Acceptance::ROLE_DELIVERER),
         ]);

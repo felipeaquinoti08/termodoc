@@ -97,11 +97,16 @@ class DocumentGenerator
             'pdf_document_id' => $pdf_documents_id,
         ]);
 
-        if ($require_acceptance) {
-            SignatureProviderManager::getInstance()
-                ->resolve($template->fields['signature_provider'] ?? SignatureProviderManager::INTERNAL)
-                ->initiate($document);
-        }
+        // External providers are no longer kicked off automatically here -
+        // sending a document out (e-mailing real people through Assinei
+        // or whichever provider) is deliberately a separate, explicit step
+        // the admin takes from the document's own page ("Enviar para
+        // assinatura" - see Document::showForm()'s can_send_signature and
+        // front/document.form.php's send_signature action), so a
+        // just-generated document can be reviewed first, and a failed
+        // send can be retried without regenerating the whole document.
+        // InternalAcceptanceProvider::initiate() was always a no-op, so
+        // internal-provider documents are unaffected either way.
 
         return $document;
     }

@@ -5,6 +5,7 @@ use Glpi\Exception\Http\AccessDeniedHttpException;
 use Glpi\Exception\Http\NotFoundHttpException;
 use GlpiPlugin\Termodocs\Acceptance;
 use GlpiPlugin\Termodocs\Document;
+use GlpiPlugin\Termodocs\Signature\SignatureProviderManager;
 
 Session::checkLoginUser();
 
@@ -61,6 +62,9 @@ TemplateRenderer::getInstance()->display('@termodocs/acceptance.html.twig', [
     'can_act'             => !$already_signed && $is_waiting && !$is_externally_signed,
     'waiting_other_party' => $already_signed && $is_waiting,
     'waiting_externally'  => !$already_signed && $is_waiting && $is_externally_signed,
+    'signature_provider_label' => SignatureProviderManager::getInstance()
+        ->resolve($document->fields['signature_provider'] ?? SignatureProviderManager::INTERNAL)
+        ->getLabel(),
 ]);
 
 if ($is_central) {

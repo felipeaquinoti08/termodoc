@@ -12,7 +12,7 @@
     {% endif %}
 
     {% if documents is empty %}
-        <p class="text-muted">{{ __('Nenhum documento gerado para este ativo ainda.', 'termodocs') }}</p>
+        <p class="text-muted">{{ empty_message|default(__('Nenhum documento gerado para este ativo ainda.', 'termodocs')) }}</p>
     {% else %}
         <table class="table table-sm">
             <thead>

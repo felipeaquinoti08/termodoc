@@ -1,4 +1,5 @@
 {% import 'components/form/basic_inputs_macros.html.twig' as inputs %}
+{% import 'components/form/fields_macros.html.twig' as fields %}
 
 <div class="termodocs-document card">
     <div class="card-body">
@@ -19,6 +20,20 @@
                        href="{{ config('root_doc') }}/plugins/termodocs/front/acceptance.php?documents_id={{ item.getID() }}">
                         <i class="ti ti-signature"></i> {{ __('Revisar e assinar', 'termodocs') }}
                     </a>
+                {% endif %}
+                {% if can_choose_signature %}
+                    <form method="post" action="{{ config('root_doc') }}/plugins/termodocs/front/document.form.php" class="d-flex gap-2 align-items-center">
+                        <input type="hidden" name="id" value="{{ item.getID() }}">
+                        {{ fields.csrfField() }}
+                        <select name="signature_provider" class="form-select form-select-sm" style="width:auto">
+                            {% for key, label in available_providers %}
+                                <option value="{{ key }}"{{ key == current_provider_key ? ' selected' : '' }}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" name="send_signature" class="btn btn-primary btn-sm">
+                            <i class="ti ti-send"></i> {{ __('Enviar para assinatura', 'termodocs') }}
+                        </button>
+                    </form>
                 {% endif %}
             </div>
         </div>
@@ -55,7 +70,7 @@
             <div class="alert alert-info">{{ __('Você já assinou; aguardando a assinatura da outra parte.', 'termodocs') }}</div>
         {% endif %}
         {% if waiting_externally %}
-            <div class="alert alert-info">{{ __('A assinatura deste documento é feita fora do GLPI, através da Assinei.digital. Verifique seu e-mail para o link de assinatura.', 'termodocs') }}</div>
+            <div class="alert alert-info">{{ __('A assinatura deste documento é feita fora do GLPI, através de', 'termodocs') }} {{ signature_provider_label }}. {{ __('Verifique seu e-mail para o link de assinatura.', 'termodocs') }}</div>
         {% endif %}
 
         {% if items is not empty %}

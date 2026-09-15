@@ -57,6 +57,10 @@ function plugin_init_termodocs(): void
             'Peripheral',
             'Printer',
             'Phone',
+            // "Documentos assinados" - every document where this user was
+            // recipient or deliverer, regardless of which asset it's
+            // about (see Document::getTabNameForItem()'s User branch).
+            'User',
         ],
     ]);
 
