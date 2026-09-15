@@ -189,10 +189,10 @@ class AssineiApiClient
     }
 
     /**
-     * GET /v1/Cofre/GetAll - only used from front/config.php's "Listar
-     * cofres existentes" helper, so an admin can find/confirm a Cofre ID
-     * without leaving GLPI (it's not surfaced anywhere obvious in
-     * Assinei's own portal UI).
+     * GET /v1/Cofre/GetAll - confirmed (against a real tenant) to hang
+     * until timeout in production; not called from anywhere in the
+     * plugin. Left here only in case Assinei fixes it later - use
+     * getVault() to confirm a specific Cofre ID instead, which does work.
      */
     public function listVaults(): array
     {
@@ -200,9 +200,10 @@ class AssineiApiClient
     }
 
     /**
-     * POST /v1/Cofre - same "Criar novo cofre" helper as listVaults().
+     * POST /v1/Cofre - "Criar novo cofre" helper in front/config.php.
      * `sigilo`: 1 = público (dentro do tenant), per the "Integração -
-     * Processo Básico" example.
+     * Processo Básico" example. A "Cofre" here shows up as "Pasta" under
+     * Documentos in Assinei's own portal UI.
      */
     public function createVault(string $titulo, string $descricao = ''): array
     {
@@ -211,5 +212,56 @@ class AssineiApiClient
             'descricao' => $descricao,
             'sigilo'    => 1,
         ]);
+    }
+
+    /**
+     * GET /v1/Cofre/{cofreId} - "Verificar" helper in front/config.php,
+     * confirming a saved Cofre ID still exists/is reachable (confirmed
+     * working, unlike listVaults() above).
+     */
+    public function getVault(string $cofreId): array
+    {
+        return $this->request('GET', '/v1/Cofre/' . $cofreId);
+    }
+
+    /**
+     * POST /v1/CofreUsuario/CofresDoUsuarioPaginados - responds (unlike
+     * GET /v1/Cofre/GetAll above, which hangs), but its `count`/`total`
+     * fields and how many rows come back are inconsistent between
+     * identical calls (confirmed against a real tenant: 90 results with
+     * a claimed total of 5134 one time, 15 results with a claimed total
+     * of 15 the next, neither explained by `pageSize` or the `nome`
+     * filter) - not reliable enough to build a full listing feature on.
+     * Every one of those test calls did still include the specific
+     * cofre being looked for, though, which is why findVaultByName()
+     * below builds on it for a single best-effort name lookup rather
+     * than avoiding it entirely.
+     */
+    public function listUserVaults(int $pageSize = 200): array
+    {
+        return $this->request('POST', '/v1/CofreUsuario/CofresDoUsuarioPaginados', [
+            'pageNumber' => 1,
+            'pageSize'   => $pageSize,
+        ]);
+    }
+
+    /**
+     * Resolves a Cofre/Pasta's name to its id - the API's own `nome`
+     * filter parameter on the paginated endpoint doesn't actually filter
+     * (confirmed: searching "GLPI" returned unrelated results too), so
+     * this fetches a page and matches the title client-side instead.
+     * Best-effort given listUserVaults()'s inconsistency above: returns
+     * null if not found in whatever page came back, which does not
+     * necessarily mean the cofre doesn't exist.
+     */
+    public function findVaultByName(string $nome): ?array
+    {
+        $response = $this->listUserVaults();
+        foreach (($response['data'] ?? []) as $vault) {
+            if (isset($vault['titulo']) && strcasecmp(trim((string) $vault['titulo']), trim($nome)) === 0) {
+                return $vault;
+            }
+        }
+        return null;
     }
 }

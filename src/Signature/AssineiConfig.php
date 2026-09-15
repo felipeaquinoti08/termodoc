@@ -38,6 +38,11 @@ class AssineiConfig
         'portal_user'               => '',
         'portal_password'             => '',
         'tenant_id'                     => '',
+        // cofre_id is resolved and stored by front/config.php's "Buscar"/
+        // "Criar novo cofre" actions from whatever name the admin typed
+        // into cofre_nome - the raw UUID is never something an admin
+        // types directly (see AssineiApiClient::findVaultByName()).
+        'cofre_nome'                       => '',
         'cofre_id'                        => '',
         'participante_tipo_id'              => self::DEFAULT_PARTICIPANT_TYPE_ID,
         'webhook_secret'                       => '',
@@ -68,19 +73,33 @@ class AssineiConfig
     }
 
     /**
-     * The minimum needed to actually call the API - is_active alone
-     * isn't enough to try, and trying with half-filled credentials would
-     * just produce confusing 401s deep inside AssineiApiClient.
+     * Just enough to authenticate and call the API (subscription key +
+     * portal user/password + tenant) - deliberately does NOT require
+     * cofre_id, since front/config.php's "Listar/Criar cofre" helper
+     * exists precisely to discover/create that value and would
+     * otherwise be permanently unusable (can't require a Cofre ID to
+     * look up a Cofre ID).
      */
-    public static function isConfigured(): bool
+    public static function hasAuthCredentials(): bool
     {
         $config = self::get();
-        foreach (['subscription_key', 'portal_user', 'portal_password', 'tenant_id', 'cofre_id'] as $required) {
+        foreach (['subscription_key', 'portal_user', 'portal_password', 'tenant_id'] as $required) {
             if ($config[$required] === '') {
                 return false;
             }
         }
         return true;
+    }
+
+    /**
+     * The minimum needed to actually send a document (auth credentials
+     * plus a Cofre to store it in) - is_active alone isn't enough to
+     * try, and trying with half-filled credentials would just produce
+     * confusing 401s deep inside AssineiApiClient.
+     */
+    public static function isConfigured(): bool
+    {
+        return self::hasAuthCredentials() && self::get()['cofre_id'] !== '';
     }
 
     public static function isActive(): bool
