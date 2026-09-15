@@ -388,6 +388,29 @@ class Document extends CommonDBTM
         return $documents;
     }
 
+    /**
+     * @param array<int,array<string,mixed>> $items rows from
+     *   Document_Item::getItemsForDocument()
+     * @return array<int,array<string,mixed>>
+     */
+    private static function decorateItemsWithCondition(array $items): array
+    {
+        foreach ($items as &$linked) {
+            if ($linked['condition_ok'] === null) {
+                $linked['condition_label'] = null;
+                $linked['condition_class'] = null;
+            } elseif ((int) $linked['condition_ok'] === 1) {
+                $linked['condition_label'] = __('Boas condições', 'termodocs');
+                $linked['condition_class'] = 'bg-green-lt';
+            } else {
+                $linked['condition_label'] = __('Com avaria', 'termodocs');
+                $linked['condition_class'] = 'bg-red-lt';
+            }
+        }
+        unset($linked);
+        return $items;
+    }
+
     public static function onAssetPurge(CommonDBTM $item): void
     {
         (new Document_Item())->deleteByCriteria([
@@ -460,7 +483,7 @@ class Document extends CommonDBTM
     {
         $this->initForm($ID, $options);
 
-        $items = Document_Item::getItemsForDocument((int) $ID);
+        $items = self::decorateItemsWithCondition(Document_Item::getItemsForDocument((int) $ID));
         $recipient = new User();
         $recipient->getFromDB((int) $this->fields['users_id_recipient']);
         $deliverer = new User();

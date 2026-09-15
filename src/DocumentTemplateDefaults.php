@@ -200,4 +200,114 @@ class DocumentTemplateDefaults
             </div>
             HTML;
     }
+
+    public static function getReturnHeaderHtml(): string
+    {
+        return <<<HTML
+            <div class="logo">
+                {{ entity.name }}
+                <small>Termo de responsabilidade</small>
+            </div>
+            <div class="doc-title">
+                <h2>Termo de Devolução</h2>
+                <p>Data: {{ document.date }}</p>
+            </div>
+            HTML;
+    }
+
+    /**
+     * data-td-role stays "recipient"/"deliverer" even though the visible
+     * .role labels below read "Colaborador (devolvendo)"/"Recebido por
+     * (TI)" - those attributes are the plugin's internal signature-slot
+     * markers (tied to Acceptance::ROLE_RECIPIENT/ROLE_DELIVERER, see
+     * Document::composeSignedHtml()), not display text, and must stay put
+     * regardless of which human-facing wording a template uses.
+     */
+    public static function getReturnContentHtml(): string
+    {
+        return <<<HTML
+            <div class="info-grid">
+              <div class="info-item">
+                <label>Colaborador (Devolvendo)</label>
+                <div class="value">{{ user.firstname }} {{ user.realname }}</div>
+              </div>
+              <div class="info-item">
+                <label>Login / Matrícula</label>
+                <div class="value">{{ user.name }}</div>
+              </div>
+              <div class="info-item">
+                <label>E-mail corporativo</label>
+                <div class="value">{{ user.email }}</div>
+              </div>
+              <div class="info-item">
+                <label>Recebido por (TI)</label>
+                <div class="value">{{ requester.firstname }} {{ requester.realname }}</div>
+              </div>
+              <div class="info-item">
+                <label>Entidade</label>
+                <div class="value">{{ entity.name }}</div>
+              </div>
+            </div>
+
+            <div class="intro">
+              Pelo presente instrumento, o(a) colaborador(a) acima identificado(a) devolve à
+              <strong>{{ entity.name }}</strong> os equipamentos descritos na tabela abaixo,
+              encerrando a partir desta data sua responsabilidade pela guarda e conservação dos
+              mesmos, ressalvado o desgaste natural decorrente do uso regular.
+            </div>
+
+            <table class="equipment">
+              <thead>
+                <tr>
+                  <th style="width:6%">#</th>
+                  <th style="width:22%">Tipo</th>
+                  <th style="width:28%">Equipamento</th>
+                  <th style="width:20%">Nº de Série</th>
+                  <th style="width:24%">Patrimônio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in items %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                  <td>{{ item.type_name }}</td>
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.serial|default('-') }}</td>
+                  <td>{{ item.otherserial|default('-') }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+
+            <div class="terms">
+              <h3>Termo e Condições</h3>
+              <div class="terms-body">
+                <ol>
+                  <li>O(A) colaborador(a) declara devolver os equipamentos listados nesta tabela, encerrando sua responsabilidade sobre a guarda e conservação a partir da data deste termo.</li>
+                  <li>A equipe de TI inspecionará os equipamentos devolvidos, registrando eventuais danos, avarias ou acessórios faltantes que não decorram do uso normal.</li>
+                  <li>Equipamentos devolvidos em desacordo com o estado esperado (dano, extravio de acessórios, alterações não autorizadas) poderão ensejar apuração de responsabilidade, conforme política interna da empresa.</li>
+                  <li>A partir da assinatura deste termo, os equipamentos listados deixam de estar vinculados ao(à) colaborador(a) no cadastro da empresa.</li>
+                  <li>O presente termo passa a vigorar a partir da data de sua assinatura.</li>
+                </ol>
+              </div>
+            </div>
+
+            <div class="signatures">
+              <div class="signature-block">
+                <div class="td-signature-name" data-td-role="recipient"></div>
+                <div class="line"></div>
+                <div class="name">{{ user.firstname }} {{ user.realname }}</div>
+                <div class="role">Colaborador (devolvendo)</div>
+                <div class="td-signature-date" data-td-role="recipient"></div>
+              </div>
+              <div class="signature-block">
+                <div class="td-signature-name" data-td-role="deliverer"></div>
+                <div class="line"></div>
+                <div class="name">{{ requester.firstname }} {{ requester.realname }}</div>
+                <div class="role">Recebido por (TI)</div>
+                <div class="td-signature-date" data-td-role="deliverer"></div>
+              </div>
+            </div>
+            HTML;
+    }
 }

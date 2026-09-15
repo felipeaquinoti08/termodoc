@@ -67,6 +67,7 @@ function plugin_termodocs_install_run(): bool
             `is_deleted` tinyint NOT NULL DEFAULT '0',
             `date_generated` timestamp NULL DEFAULT NULL,
             `date_finalized` timestamp NULL DEFAULT NULL,
+            `notes` text,
             `date_creation` timestamp NULL DEFAULT NULL,
             `date_mod` timestamp NULL DEFAULT NULL,
             PRIMARY KEY (`id`),
@@ -85,6 +86,7 @@ function plugin_termodocs_install_run(): bool
     } else {
         migrate_termodocs_add_delivery_return_fields();
         migrate_termodocs_add_external_signature_fields();
+        migrate_termodocs_add_condition_tracking();
     }
 
     if (!$DB->tableExists('glpi_plugin_termodocs_documents_items')) {
@@ -95,6 +97,7 @@ function plugin_termodocs_install_run(): bool
             `items_id` int {$default_key_sign} NOT NULL DEFAULT '0',
             `item_alias` varchar(64) DEFAULT NULL,
             `item_snapshot` text,
+            `condition_ok` tinyint DEFAULT NULL,
             `date_creation` timestamp NULL DEFAULT NULL,
             `date_mod` timestamp NULL DEFAULT NULL,
             PRIMARY KEY (`id`),
@@ -102,6 +105,8 @@ function plugin_termodocs_install_run(): bool
             KEY `plugin_termodocs_documents_id` (`plugin_termodocs_documents_id`),
             KEY `item` (`itemtype`,`items_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation} ROW_FORMAT=DYNAMIC;");
+    } else {
+        migrate_termodocs_add_condition_tracking();
     }
 
     if (!$DB->tableExists('glpi_plugin_termodocs_acceptances')) {
@@ -294,6 +299,30 @@ function migrate_termodocs_add_external_signature_fields(): void
     // edit. See AssineiDigitalProvider::resolveRole().
     if (!$DB->fieldExists('glpi_plugin_termodocs_documents', 'external_participants')) {
         $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents` ADD COLUMN `external_participants` text AFTER `external_payload`");
+    }
+}
+
+/**
+ * Post-handover condition tracking: a general note on the document
+ * itself, plus a per-item "received in good condition" checkbox - filled
+ * in from the document's own page after it exists (see
+ * front/document.form.php's save_notes action), independent of the
+ * signature flow. Touches both glpi_plugin_termodocs_documents (`notes`)
+ * and glpi_plugin_termodocs_documents_items (`condition_ok`), so this is
+ * called from both tables' branches in the install function above -
+ * each ALTER is its own fieldExists guard, so calling it twice per run
+ * is harmless. Safe to re-run.
+ */
+function migrate_termodocs_add_condition_tracking(): void
+{
+    global $DB;
+
+    if ($DB->tableExists('glpi_plugin_termodocs_documents') && !$DB->fieldExists('glpi_plugin_termodocs_documents', 'notes')) {
+        $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents` ADD COLUMN `notes` text AFTER `date_finalized`");
+    }
+
+    if ($DB->tableExists('glpi_plugin_termodocs_documents_items') && !$DB->fieldExists('glpi_plugin_termodocs_documents_items', 'condition_ok')) {
+        $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents_items` ADD COLUMN `condition_ok` tinyint DEFAULT NULL AFTER `item_snapshot`");
     }
 }
 

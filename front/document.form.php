@@ -3,6 +3,7 @@
 use GlpiPlugin\Termodocs\Acceptance;
 use GlpiPlugin\Termodocs\Document;
 use GlpiPlugin\Termodocs\DocumentGen\DocumentGenerator;
+use GlpiPlugin\Termodocs\Document_Item;
 use GlpiPlugin\Termodocs\DocumentTemplate;
 use GlpiPlugin\Termodocs\Menu;
 use GlpiPlugin\Termodocs\Signature\SignatureProviderManager;
@@ -143,6 +144,32 @@ if (isset($_POST['do_generate'])) {
         ]);
     }
     Html::back();
+} elseif (isset($_POST['save_notes'])) {
+    // Purely operational annotation (condition on physical
+    // handover/return + a free-text note) - never touches
+    // rendered_html/content_hash (the frozen legal record) or the
+    // signature flow, so it's allowed regardless of status.
+    Session::checkRight(Document::$rightname, CREATE);
+
+    $document = new Document();
+    if (!$document->getFromDB((int) $_POST['id'])) {
+        Html::back();
+    }
+
+    $document->update([
+        'id'    => $document->getID(),
+        'notes' => trim((string) ($_POST['notes'] ?? '')),
+    ]);
+
+    $checked = $_POST['condition'] ?? [];
+    foreach (Document_Item::getItemsForDocument($document->getID()) as $linked) {
+        (new Document_Item())->update([
+            'id'           => $linked['id'],
+            'condition_ok' => isset($checked[$linked['id']]) ? 1 : 0,
+        ]);
+    }
+
+    Html::redirect(Document::getFormURLWithID($document->getID()));
 } elseif (isset($_POST['send_signature'])) {
     // Deliberately gated the same as generating a document in the first
     // place (CREATE), not just READ - picking a provider here can kick

@@ -75,11 +75,45 @@
 
         {% if items is not empty %}
             <h5>{{ _n('Ativo vinculado', 'Ativos vinculados', 2, 'termodocs') }}</h5>
-            <ul>
-                {% for linked in items %}
-                    <li>{{ linked.item_alias ?: (linked.itemtype ~ ' #' ~ linked.items_id) }}</li>
-                {% endfor %}
-            </ul>
+            {% if is_admin %}
+                <form method="post" action="{{ config('root_doc') }}/plugins/termodocs/front/document.form.php">
+                    <input type="hidden" name="id" value="{{ item.getID() }}">
+                    {{ fields.csrfField() }}
+                    <ul class="list-unstyled mb-2">
+                        {% for linked in items %}
+                            <li class="form-check mb-1">
+                                <input type="checkbox" class="form-check-input" id="termodocs-cond-{{ linked.id }}"
+                                       name="condition[{{ linked.id }}]" value="1"{{ linked.condition_ok == 1 ? ' checked' : '' }}>
+                                <label class="form-check-label" for="termodocs-cond-{{ linked.id }}">
+                                    {{ linked.item_alias ?: (linked.itemtype ~ ' #' ~ linked.items_id) }}
+                                    - {{ __('Em boas condições', 'termodocs') }}
+                                </label>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    <div class="mb-2" style="max-width:500px">
+                        <label class="form-label">{{ __('Observações', 'termodocs') }}</label>
+                        <textarea name="notes" class="form-control" rows="3">{{ item.fields.notes }}</textarea>
+                    </div>
+                    <button type="submit" name="save_notes" class="btn btn-outline-primary btn-sm">
+                        <i class="ti ti-device-floppy"></i> {{ __('Salvar observações', 'termodocs') }}
+                    </button>
+                </form>
+            {% else %}
+                <ul>
+                    {% for linked in items %}
+                        <li>
+                            {{ linked.item_alias ?: (linked.itemtype ~ ' #' ~ linked.items_id) }}
+                            {% if linked.condition_label %}
+                                <span class="badge {{ linked.condition_class }}">{{ linked.condition_label }}</span>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+                {% if item.fields.notes %}
+                    <p class="text-muted">{{ __('Observações', 'termodocs') }}: {{ item.fields.notes }}</p>
+                {% endif %}
+            {% endif %}
         {% endif %}
 
         <h5>{{ __('Pré-visualização do conteúdo', 'termodocs') }}</h5>
