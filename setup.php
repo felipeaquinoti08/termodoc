@@ -1,13 +1,17 @@
 <?php
 
+use Glpi\Http\Firewall;
+use Glpi\Http\SessionManager;
 use Glpi\Plugin\Hooks;
 use GlpiPlugin\Termodocs\Document;
 use GlpiPlugin\Termodocs\MassiveActionHandler;
 use GlpiPlugin\Termodocs\Menu as TermodocsMenu;
 use GlpiPlugin\Termodocs\PendingSignatures;
 use GlpiPlugin\Termodocs\Profile as TermodocsProfile;
+use GlpiPlugin\Termodocs\Signature\AssineiDigitalProvider;
+use GlpiPlugin\Termodocs\Signature\SignatureProviderManager;
 
-define('PLUGIN_TERMODOCS_VERSION', '1.0.0');
+define('PLUGIN_TERMODOCS_VERSION', '1.1.0');
 define('PLUGIN_TERMODOCS_MIN_GLPI_VERSION', '11.0.0');
 define('PLUGIN_TERMODOCS_MAX_GLPI_VERSION', '11.9.99');
 
@@ -70,6 +74,38 @@ function plugin_init_termodocs(): void
         'Printer'          => [Document::class, 'onAssetPurge'],
         'Phone'            => [Document::class, 'onAssetPurge'],
     ];
+
+    // v2 signature provider (see src/Signature/SignatureProviderInterface.php's
+    // docblock) - registering it here is the only wiring it needs; the
+    // template form's "Modo de assinatura" dropdown and the rest of the
+    // document lifecycle already read from SignatureProviderManager
+    // dynamically.
+    SignatureProviderManager::getInstance()->register(new AssineiDigitalProvider());
+
+    // Adds the gear/"Configure" icon next to the plugin in Setup > Plugins.
+    $PLUGIN_HOOKS[Hooks::CONFIG_PAGE]['termodocs'] = 'front/config.php';
+
+    // portal_password/webhook_secret are stored via
+    // Config::setConfigurationValues() under context 'plugin:termodocs'
+    // (see GlpiPlugin\Termodocs\Signature\AssineiConfig) - this hook makes
+    // GLPI's own GLPIKey service encrypt/decrypt those two fields
+    // transparently, same mechanism core uses for its SMTP OAuth secrets.
+    $PLUGIN_HOOKS[Hooks::SECURED_CONFIGS]['termodocs'] = ['portal_password', 'webhook_secret'];
+
+    // front/webhook.php is called by Assinei.digital's own servers, not
+    // a logged-in GLPI user - legacy plugin front scripts default to
+    // requiring an authenticated session, so it needs to be explicitly
+    // exempted. Authentication for this route is instead the shared
+    // secret checked inside the script itself.
+    Firewall::addPluginStrategyForLegacyScripts('termodocs', '#^/front/webhook\.php#', Firewall::STRATEGY_NO_CHECK);
+
+    // The Firewall exemption above only lifts the login requirement -
+    // GLPI's CheckCsrfListener runs independently on every non-GET
+    // request and rejects it for lack of a session-bound CSRF token
+    // unless the path is also declared session-*stateless* here; a
+    // webhook POST from Assinei.digital's servers has no GLPI session to
+    // carry a CSRF token in the first place.
+    SessionManager::registerPluginStatelessPath('termodocs', '#^/front/webhook\.php#');
 }
 
 /**

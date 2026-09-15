@@ -54,6 +54,9 @@
         {% if waiting_other_party %}
             <div class="alert alert-info">{{ __('Você já assinou; aguardando a assinatura da outra parte.', 'termodocs') }}</div>
         {% endif %}
+        {% if waiting_externally %}
+            <div class="alert alert-info">{{ __('A assinatura deste documento é feita fora do GLPI, através da Assinei.digital. Verifique seu e-mail para o link de assinatura.', 'termodocs') }}</div>
+        {% endif %}
 
         {% if items is not empty %}
             <h5>{{ _n('Ativo vinculado', 'Ativos vinculados', 2, 'termodocs') }}</h5>

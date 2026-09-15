@@ -55,6 +55,8 @@ function plugin_termodocs_install_run(): bool
             `content_hash` char(64) DEFAULT NULL,
             `theme_css_snapshot` mediumtext,
             `signature_provider` varchar(64) NOT NULL DEFAULT 'internal',
+            `external_reference` varchar(255) DEFAULT NULL,
+            `external_payload` text,
             `users_id_recipient` int {$default_key_sign} NOT NULL DEFAULT '0',
             `users_id_deliverer` int {$default_key_sign} NOT NULL DEFAULT '0',
             `users_id_requester` int {$default_key_sign} NOT NULL DEFAULT '0',
@@ -76,10 +78,12 @@ function plugin_termodocs_install_run(): bool
             KEY `pdf_document_id` (`pdf_document_id`),
             KEY `entities_id` (`entities_id`),
             KEY `is_deleted` (`is_deleted`),
-            KEY `content_hash` (`content_hash`)
+            KEY `content_hash` (`content_hash`),
+            KEY `external_reference` (`external_reference`)
         ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation} ROW_FORMAT=DYNAMIC;");
     } else {
         migrate_termodocs_add_delivery_return_fields();
+        migrate_termodocs_add_external_signature_fields();
     }
 
     if (!$DB->tableExists('glpi_plugin_termodocs_documents_items')) {
@@ -239,6 +243,30 @@ function migrate_termodocs_add_delivery_return_fields(): void
 
     if ($DB->fieldExists('glpi_plugin_termodocs_documenttemplates', 'require_acceptance')) {
         $DB->doQuery('UPDATE `glpi_plugin_termodocs_documenttemplates` SET `require_acceptance` = 1');
+    }
+}
+
+/**
+ * External signature providers (Assinei.digital and friends) need
+ * somewhere on the *document* itself to keep the envelope-level
+ * reference returned when signing was initiated (e.g. Assinei's
+ * `documentoId`) and the last raw status/webhook payload received for
+ * it - `glpi_plugin_termodocs_acceptances` already has this pair of
+ * columns per-role, but a role only gets an Acceptance row once that
+ * party has actually signed/refused, which is too late to know where
+ * to route an incoming webhook. Safe to re-run.
+ */
+function migrate_termodocs_add_external_signature_fields(): void
+{
+    global $DB;
+
+    if (!$DB->fieldExists('glpi_plugin_termodocs_documents', 'external_reference')) {
+        $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents` ADD COLUMN `external_reference` varchar(255) DEFAULT NULL AFTER `signature_provider`");
+        $DB->doQuery('ALTER TABLE `glpi_plugin_termodocs_documents` ADD KEY `external_reference` (`external_reference`)');
+    }
+
+    if (!$DB->fieldExists('glpi_plugin_termodocs_documents', 'external_payload')) {
+        $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents` ADD COLUMN `external_payload` text AFTER `external_reference`");
     }
 }
 

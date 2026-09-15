@@ -5,6 +5,7 @@ namespace GlpiPlugin\Termodocs;
 use CommonDBTM;
 use CommonGLPI;
 use Glpi\Application\View\TemplateRenderer;
+use GlpiPlugin\Termodocs\Signature\SignatureProviderManager;
 use Html;
 use Search;
 use Session;
@@ -159,6 +160,19 @@ class Document extends CommonDBTM
             return Acceptance::ROLE_DELIVERER;
         }
         return null;
+    }
+
+    /**
+     * True once an external provider (Assinei.digital...) owns the
+     * signing step for this document - GLPI's own accept/refuse buttons
+     * (front/acceptance.php) must stay hidden then, since clicking them
+     * would record a "signature" here while the actual legal signing
+     * still happens on the provider's hosted page; only its webhook
+     * (Acceptance::acceptExternal()/refuseExternal()) may record one.
+     */
+    public function isExternallySigned(): bool
+    {
+        return ($this->fields['signature_provider'] ?? SignatureProviderManager::INTERNAL) !== SignatureProviderManager::INTERNAL;
     }
 
     public function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
@@ -356,8 +370,9 @@ class Document extends CommonDBTM
             'deliverer_role_label' => $this->getRoleLabel(Acceptance::ROLE_DELIVERER),
             'status_label'        => self::getStatusLabel((int) $this->fields['status']),
             'status_class'        => self::getStatusBadgeClass((int) $this->fields['status']),
-            'can_accept'          => $my_role !== null && $my_acceptance === null && $is_waiting,
+            'can_accept'          => $my_role !== null && $my_acceptance === null && $is_waiting && !$this->isExternallySigned(),
             'waiting_other_party' => $my_acceptance !== null && $is_waiting,
+            'waiting_externally'  => $my_role !== null && $my_acceptance === null && $is_waiting && $this->isExternallySigned(),
             'recipient_signed'    => Acceptance::hasSigned((int) $ID, Acceptance::ROLE_RECIPIENT),
             'deliverer_signed'    => Acceptance::hasSigned((int) $ID, Acceptance::ROLE_DELIVERER),
         ]);

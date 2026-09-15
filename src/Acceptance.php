@@ -68,13 +68,99 @@ class Acceptance extends CommonDBChild
 
     private static function record(Document $document, int $role, int $status, ?string $reason): self
     {
+        $user = new User();
+        $user->getFromDB(Session::getLoginUserID());
+
+        return self::recordAny(
+            $document,
+            $role,
+            $status,
+            $reason,
+            Session::getLoginUserID(),
+            $user->getFriendlyName(),
+            Toolbox::getRemoteIpAddress(),
+            $_SERVER['HTTP_USER_AGENT'] ?? '',
+            $document->fields['signature_provider'] ?? SignatureProviderManager::INTERNAL,
+            null,
+            null
+        );
+    }
+
+    /**
+     * Records a signature/refusal reported by an external provider's
+     * webhook (see AssineiDigitalProvider::handleCallback()) - there is
+     * no GLPI session behind this, so unlike accept()/refuse() every
+     * actor detail has to be supplied explicitly by the caller instead
+     * of read from Session/$_SERVER. `users_id` may be 0 when the
+     * webhook's participant e-mail couldn't be matched to a GLPI user;
+     * the human-readable name is still preserved via $name_snapshot.
+     */
+    public static function acceptExternal(
+        Document $document,
+        int $role,
+        int $users_id,
+        string $name_snapshot,
+        string $provider,
+        ?string $external_reference,
+        array $external_payload
+    ): self {
+        return self::recordAny(
+            $document,
+            $role,
+            Document::ACCEPTED,
+            null,
+            $users_id,
+            $name_snapshot,
+            null,
+            null,
+            $provider,
+            $external_reference,
+            $external_payload
+        );
+    }
+
+    public static function refuseExternal(
+        Document $document,
+        int $role,
+        int $users_id,
+        string $name_snapshot,
+        string $reason,
+        string $provider,
+        ?string $external_reference,
+        array $external_payload
+    ): self {
+        return self::recordAny(
+            $document,
+            $role,
+            Document::REFUSED,
+            $reason,
+            $users_id,
+            $name_snapshot,
+            null,
+            null,
+            $provider,
+            $external_reference,
+            $external_payload
+        );
+    }
+
+    private static function recordAny(
+        Document $document,
+        int $role,
+        int $status,
+        ?string $reason,
+        int $users_id,
+        string $name_snapshot,
+        ?string $ip_address,
+        ?string $user_agent,
+        string $provider,
+        ?string $external_reference,
+        ?array $external_payload
+    ): self {
         $existing = self::getForRole($document->getID(), $role);
         if ($existing !== null) {
             return $existing;
         }
-
-        $user = new User();
-        $user->getFromDB(Session::getLoginUserID());
 
         $computed_hash = hash('sha256', $document->fields['rendered_html']);
 
@@ -82,14 +168,16 @@ class Acceptance extends CommonDBChild
         $acceptance->add([
             'plugin_termodocs_documents_id' => $document->getID(),
             'role'                           => $role,
-            'users_id'                       => Session::getLoginUserID(),
+            'users_id'                       => $users_id,
             'status'                         => $status,
-            'accepted_name_snapshot'         => $user->getFriendlyName(),
-            'ip_address'                     => Toolbox::getRemoteIpAddress(),
-            'user_agent'                     => $_SERVER['HTTP_USER_AGENT'] ?? '',
+            'accepted_name_snapshot'         => $name_snapshot,
+            'ip_address'                     => $ip_address,
+            'user_agent'                     => $user_agent,
             'content_hash_signed'            => $computed_hash,
             'refusal_reason'                 => $reason,
-            'signature_provider'             => $document->fields['signature_provider'] ?? SignatureProviderManager::INTERNAL,
+            'signature_provider'             => $provider,
+            'external_reference'             => $external_reference,
+            'external_payload'               => $external_payload !== null ? json_encode($external_payload) : null,
         ]);
 
         self::recomputeDocumentStatus($document);

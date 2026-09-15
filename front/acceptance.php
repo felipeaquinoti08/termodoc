@@ -23,8 +23,14 @@ $self_url = $CFG_GLPI['root_doc'] . '/plugins/termodocs/front/acceptance.php?doc
 
 $already_signed = Acceptance::hasSigned($document->getID(), $my_role);
 
+// Signing happens on the external provider's own hosted page once a
+// document is on that flow (see Document::isExternallySigned()) - the
+// UI below never renders the accept/refuse form in that case, but this
+// guards the POST handlers too against a stale bookmarked/cached page.
+$is_externally_signed = $document->isExternallySigned();
+
 if (isset($_POST['accept'])) {
-    if (!$already_signed && (int) $document->fields['status'] === Document::WAITING_ACCEPTANCE) {
+    if (!$is_externally_signed && !$already_signed && (int) $document->fields['status'] === Document::WAITING_ACCEPTANCE) {
         Acceptance::accept($document, $my_role);
     }
     // Redirect back to this same self-service-friendly page (not to
@@ -32,7 +38,7 @@ if (isset($_POST['accept'])) {
     // would deny recipients access to their own just-signed document).
     Html::redirect($self_url);
 } elseif (isset($_POST['refuse'])) {
-    if (!$already_signed && (int) $document->fields['status'] === Document::WAITING_ACCEPTANCE) {
+    if (!$is_externally_signed && !$already_signed && (int) $document->fields['status'] === Document::WAITING_ACCEPTANCE) {
         Acceptance::refuse($document, $my_role, (string) ($_POST['refusal_reason'] ?? ''));
     }
     Html::redirect($self_url);
@@ -52,8 +58,9 @@ if ($is_central) {
 TemplateRenderer::getInstance()->display('@termodocs/acceptance.html.twig', [
     'document'            => $document,
     'my_role_label'       => $document->getRoleLabel($my_role),
-    'can_act'             => !$already_signed && $is_waiting,
+    'can_act'             => !$already_signed && $is_waiting && !$is_externally_signed,
     'waiting_other_party' => $already_signed && $is_waiting,
+    'waiting_externally'  => !$already_signed && $is_waiting && $is_externally_signed,
 ]);
 
 if ($is_central) {

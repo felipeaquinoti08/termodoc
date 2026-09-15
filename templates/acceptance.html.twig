@@ -33,6 +33,11 @@
                 {{ __('Você já assinou como', 'termodocs') }} <strong>{{ my_role_label }}</strong>.
                 {{ __('Aguardando a assinatura da outra parte para o documento ser finalizado.', 'termodocs') }}
             </div>
+        {% elseif waiting_externally %}
+            <div class="alert alert-info mt-3">
+                {{ __('Assinando como', 'termodocs') }} <strong>{{ my_role_label }}</strong>.
+                {{ __('A assinatura deste documento é feita fora do GLPI, através da Assinei.digital - verifique seu e-mail para o link de assinatura.', 'termodocs') }}
+            </div>
         {% else %}
             <div class="alert alert-info mt-3">
                 {{ __('Este documento já foi finalizado; nenhuma ação adicional é necessária.', 'termodocs') }}
