@@ -57,6 +57,7 @@ function plugin_termodocs_install_run(): bool
             `signature_provider` varchar(64) NOT NULL DEFAULT 'internal',
             `external_reference` varchar(255) DEFAULT NULL,
             `external_payload` text,
+            `external_participants` text,
             `users_id_recipient` int {$default_key_sign} NOT NULL DEFAULT '0',
             `users_id_deliverer` int {$default_key_sign} NOT NULL DEFAULT '0',
             `users_id_requester` int {$default_key_sign} NOT NULL DEFAULT '0',
@@ -282,6 +283,17 @@ function migrate_termodocs_add_external_signature_fields(): void
 
     if (!$DB->fieldExists('glpi_plugin_termodocs_documents', 'external_payload')) {
         $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents` ADD COLUMN `external_payload` text AFTER `external_reference`");
+    }
+
+    // {"recipient": "<participant id>", "deliverer": "<participant id>"} -
+    // captured once, right when AssineiDigitalProvider::initiate() sends
+    // the document (the one moment a participant can be safely matched
+    // by e-mail, before either party has touched anything on Assinei's
+    // side) - later webhook/poll events match against these ids instead
+    // of a signer-supplied name, which the signing page might let them
+    // edit. See AssineiDigitalProvider::resolveRole().
+    if (!$DB->fieldExists('glpi_plugin_termodocs_documents', 'external_participants')) {
+        $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents` ADD COLUMN `external_participants` text AFTER `external_payload`");
     }
 }
 

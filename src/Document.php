@@ -31,6 +31,26 @@ class Document extends CommonDBTM
         return 'ti ti-file-certificate';
     }
 
+    /**
+     * A short, scannable code baked into every document's name (see
+     * DocumentGenerator::generate()) - easier to reference out loud or in
+     * a support conversation than the full name or the internal ID, and
+     * unlike the recipient's name, never something a party could cause to
+     * change after the fact. 36^6 (~2.2 billion) combinations makes a
+     * collision practically impossible for any realistic volume of
+     * documents, so this doesn't bother checking uniqueness against
+     * existing ones.
+     */
+    public static function generateReferenceCode(): string
+    {
+        $charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        $code = '';
+        for ($i = 0; $i < 6; $i++) {
+            $code .= $charset[random_int(0, strlen($charset) - 1)];
+        }
+        return $code;
+    }
+
     public static function getStatuses(): array
     {
         return [

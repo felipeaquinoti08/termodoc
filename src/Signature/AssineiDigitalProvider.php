@@ -84,10 +84,20 @@ class AssineiDigitalProvider implements SignatureProviderInterface
 
             $client->sendForSignature($documento_id, Toolbox::getRemoteIpAddress() ?: '127.0.0.1');
 
+            // Best-effort: matching each returned participant back to
+            // recipient/deliverer by e-mail is only trustworthy right
+            // now, before either party has touched anything on Assinei's
+            // side - see resolveRole()'s doc comment. A failure here
+            // doesn't undo the send above (the document is already out
+            // for signature); it just means later matching falls back
+            // to e-mail/name from the webhook or poll payload itself.
+            $external_participants = $this->captureParticipantIds($client, $documento_id, $recipient, $deliverer);
+
             $document->update([
-                'id'                 => $document->getID(),
-                'external_reference' => $documento_id,
-                'external_payload'   => json_encode(['initiate_response' => $created]),
+                'id'                    => $document->getID(),
+                'external_reference'    => $documento_id,
+                'external_payload'      => json_encode(['initiate_response' => $created]),
+                'external_participants' => $external_participants !== null ? json_encode($external_participants) : null,
             ]);
         } catch (AssineiApiException $e) {
             $this->logAndStash($document, $e->getMessage(), [
@@ -153,10 +163,16 @@ class AssineiDigitalProvider implements SignatureProviderInterface
             ?? $payload['nome']
             ?? ($participant_email ?? __('Desconhecido', 'termodocs'));
 
+        $participant_id = $payload['participanteDocumentoId']
+            ?? $payload['participante']['id']
+            ?? $payload['participanteId']
+            ?? null;
+
         $role = $this->resolveRole(
             $document,
             is_string($participant_email) ? $participant_email : null,
-            is_string($participant_name) ? $participant_name : null
+            is_string($participant_name) ? $participant_name : null,
+            is_string($participant_id) ? $participant_id : null
         );
         if ($role === null) {
             $this->logRaw("Webhook Assinei.digital: participante ('{$participant_email}' / '{$participant_name}') não corresponde ao colaborador nem ao responsável de TI deste documento.", $payload);
@@ -234,7 +250,10 @@ class AssineiDigitalProvider implements SignatureProviderInterface
 
             $name = (string) ($p['participanteNome'] ?? $p['nome'] ?? ($email ?? __('Desconhecido', 'termodocs')));
 
-            $role = $this->resolveRole($document, $email, $name);
+            $participant_id = $p['participanteDocumentoId'] ?? $p['id'] ?? $p['participanteId'] ?? null;
+            $participant_id = is_string($participant_id) ? $participant_id : null;
+
+            $role = $this->resolveRole($document, $email, $name, $participant_id);
             if ($role === null) {
                 $this->logRaw("Poll de status: participante ('{$email}' / '{$name}') não corresponde ao colaborador nem ao responsável de TI do documento #" . $document->getID() . '.', $p);
                 continue;
@@ -257,18 +276,30 @@ class AssineiDigitalProvider implements SignatureProviderInterface
     }
 
     /**
-     * Matches by e-mail first, falling back to an exact name match when
-     * no e-mail is available - Assinei's status-check response
-     * (getStatus(), used by reconcile()) only documents `participanteNome`
-     * for each participant, no e-mail field, unlike the webhook payload's
-     * shape. Name matching is safe here specifically because the name on
-     * their side is never freely typed by the signer - it's exactly what
-     * initiate() sent as `participanteNome` in the first place
-     * ($recipient/$deliverer->getFriendlyName()), so it's an echo of our
-     * own data, not an independent identifier that could collide.
+     * Matches, in order of trust: Assinei's own per-participant id
+     * (captured once at send time - see initiate()'s
+     * captureParticipantIds() - stable and outside either party's
+     * control), then e-mail, then an exact name match. Name matching is
+     * a last resort because a signer might be able to edit their own
+     * display name on Assinei's hosted signing page before actually
+     * signing - it's only trustworthy for the id-capture step itself,
+     * immediately after initiate() creates the document and before
+     * anyone has reached that page yet.
      */
-    private function resolveRole(Document $document, ?string $email, ?string $name = null): ?int
+    private function resolveRole(Document $document, ?string $email, ?string $name = null, ?string $participant_id = null): ?int
     {
+        if ($participant_id !== null && $participant_id !== '') {
+            $stored = json_decode((string) ($document->fields['external_participants'] ?? ''), true);
+            if (is_array($stored)) {
+                if (($stored['recipient'] ?? null) === $participant_id) {
+                    return Acceptance::ROLE_RECIPIENT;
+                }
+                if (($stored['deliverer'] ?? null) === $participant_id) {
+                    return Acceptance::ROLE_DELIVERER;
+                }
+            }
+        }
+
         $recipient = new User();
         $recipient->getFromDB((int) $document->fields['users_id_recipient']);
         $deliverer = new User();
@@ -315,6 +346,66 @@ class AssineiDigitalProvider implements SignatureProviderInterface
     {
         $candidate = $response['id'] ?? $response['data']['id'] ?? $response['data'] ?? null;
         return is_string($candidate) && $candidate !== '' ? $candidate : null;
+    }
+
+    /**
+     * Fetches the just-created document's participant list and matches
+     * each one back to recipient/deliverer by e-mail - trustworthy only
+     * at this exact moment (see resolveRole()'s doc comment) - to record
+     * their Assinei-assigned ids for all future matching. Returns null
+     * (rather than a partial map) on any failure: getParticipants()
+     * erroring, an unrecognized response shape, or not finding both
+     * parties, since a partial mapping would be worse than none (silently
+     * misattributing whichever role wasn't captured).
+     *
+     * @return array{recipient:string,deliverer:string}|null
+     */
+    private function captureParticipantIds(AssineiApiClient $client, string $documento_id, User $recipient, User $deliverer): ?array
+    {
+        try {
+            $response = $client->getParticipants($documento_id);
+        } catch (AssineiApiException $e) {
+            $this->logRaw('Não foi possível capturar os ids de participante para documento Assinei ' . $documento_id . ': ' . $e->getMessage(), []);
+            return null;
+        }
+
+        $list = $response['data'] ?? $response;
+        if (!is_array($list)) {
+            return null;
+        }
+        // A single participant object (not wrapped in a list) would still
+        // be an array in PHP, so this check alone can't tell them apart -
+        // isset($list[0]) does, since a real list is always numerically
+        // indexed from 0.
+        if (!isset($list[0]) && !empty($list)) {
+            $list = [$list];
+        }
+
+        $ids = ['recipient' => null, 'deliverer' => null];
+        foreach ($list as $p) {
+            if (!is_array($p)) {
+                continue;
+            }
+
+            $email = $p['participanteEmail'] ?? $p['email'] ?? null;
+            $id = $p['participanteDocumentoId'] ?? $p['id'] ?? $p['participanteId'] ?? null;
+            if (!is_string($email) || !is_string($id) || $id === '') {
+                continue;
+            }
+
+            if (strcasecmp((string) $recipient->getDefaultEmail(), $email) === 0) {
+                $ids['recipient'] = $id;
+            } elseif (strcasecmp((string) $deliverer->getDefaultEmail(), $email) === 0) {
+                $ids['deliverer'] = $id;
+            }
+        }
+
+        if ($ids['recipient'] === null || $ids['deliverer'] === null) {
+            $this->logRaw('Não foi possível identificar ambos os participantes na resposta da Assinei para documento ' . $documento_id . '.', $response);
+            return null;
+        }
+
+        return $ids;
     }
 
     private function readPdfBase64(int $glpi_documents_id): ?string

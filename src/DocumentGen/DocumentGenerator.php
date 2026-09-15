@@ -62,7 +62,8 @@ class DocumentGenerator
         $document = new Document();
         $document->add([
             'plugin_termodocs_templates_id' => $template->getID(),
-            'name'                          => $template->fields['name'] . ' - ' . $recipient->getFriendlyName(),
+            'name'                          => $template->fields['name'] . ' - ' . $recipient->getFriendlyName() .
+                ' [' . Document::generateReferenceCode() . ']',
             'rendered_html'                 => $rendered_html,
             'content_hash'                  => $content_hash,
             'theme_css_snapshot'            => $template->fields['css'] ?? '',

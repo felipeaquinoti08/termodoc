@@ -189,6 +189,20 @@ class AssineiApiClient
     }
 
     /**
+     * GET /v1/DocumentoBusca/{documentoId}/Participante - called once,
+     * right after initiate() sends a document, to capture each
+     * participant's own unique id (see
+     * Document.external_participants/AssineiDigitalProvider::initiate()).
+     * Not confirmed against a live tenant which exact field carries that
+     * id, so callers should check a short list of candidates rather than
+     * one guessed name.
+     */
+    public function getParticipants(string $documentoId): array
+    {
+        return $this->request('GET', '/v1/DocumentoBusca/' . $documentoId . '/Participante');
+    }
+
+    /**
      * GET /v1/Cofre/GetAll - confirmed (against a real tenant) to hang
      * until timeout in production; not called from anywhere in the
      * plugin. Left here only in case Assinei fixes it later - use
