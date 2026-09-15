@@ -187,4 +187,29 @@ class AssineiApiClient
     {
         return $this->request('GET', '/v1/DocumentoBusca/' . $documentoId);
     }
+
+    /**
+     * GET /v1/Cofre/GetAll - only used from front/config.php's "Listar
+     * cofres existentes" helper, so an admin can find/confirm a Cofre ID
+     * without leaving GLPI (it's not surfaced anywhere obvious in
+     * Assinei's own portal UI).
+     */
+    public function listVaults(): array
+    {
+        return $this->request('GET', '/v1/Cofre/GetAll');
+    }
+
+    /**
+     * POST /v1/Cofre - same "Criar novo cofre" helper as listVaults().
+     * `sigilo`: 1 = público (dentro do tenant), per the "Integração -
+     * Processo Básico" example.
+     */
+    public function createVault(string $titulo, string $descricao = ''): array
+    {
+        return $this->request('POST', '/v1/Cofre', [
+            'titulo'    => $titulo,
+            'descricao' => $descricao,
+            'sigilo'    => 1,
+        ]);
+    }
 }
