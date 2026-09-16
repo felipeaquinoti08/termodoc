@@ -123,7 +123,7 @@ class DocumentTemplateDefaults
     public static function getContentHtml(): string
     {
         return <<<HTML
-            <table class="info-grid">
+            <table class="info-grid"><colgroup><col style="width:50%"><col style="width:50%"></colgroup>
               <tr>
                 <td class="info-item">
                   <label>Colaborador (Recebedor)</label>
@@ -196,7 +196,7 @@ class DocumentTemplateDefaults
               </div>
             </div>
 
-            <table class="signatures">
+            <table class="signatures"><colgroup><col style="width:50%"><col style="width:50%"></colgroup>
               <tr>
                 <td class="signature-block">
                   <div class="td-signature-name" data-td-role="deliverer"></div>
@@ -242,7 +242,7 @@ class DocumentTemplateDefaults
     public static function getReturnContentHtml(): string
     {
         return <<<HTML
-            <table class="info-grid">
+            <table class="info-grid"><colgroup><col style="width:50%"><col style="width:50%"></colgroup>
               <tr>
                 <td class="info-item">
                   <label>Colaborador (Devolvendo)</label>
@@ -315,7 +315,7 @@ class DocumentTemplateDefaults
               </div>
             </div>
 
-            <table class="signatures">
+            <table class="signatures"><colgroup><col style="width:50%"><col style="width:50%"></colgroup>
               <tr>
                 <td class="signature-block">
                   <div class="td-signature-name" data-td-role="recipient"></div>
