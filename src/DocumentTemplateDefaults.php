@@ -24,9 +24,6 @@ class DocumentTemplateDefaults
             }
 
             .td-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
                 border-bottom: 2px solid #111827;
                 padding-bottom: 14px;
                 margin-bottom: 22px;
@@ -43,8 +40,8 @@ class DocumentTemplateDefaults
             }
             .td-header .doc-title p { font-size: 9pt; color: #6b7280; margin-top: 4px; }
 
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; margin-bottom: 22px; }
-            .info-item { border-left: 3px solid #2563eb; padding: 6px 0 6px 12px; }
+            table.info-grid { width: 100%; margin-bottom: 22px; }
+            table.info-grid td.info-item { border-left: 3px solid #2563eb; padding: 6px 12px 12px 16px; vertical-align: top; width: 50%; }
             .info-item label {
                 display: block; font-size: 8pt; font-weight: 600; color: #6b7280;
                 text-transform: uppercase; letter-spacing: .8px; margin-bottom: 3px;
@@ -74,8 +71,8 @@ class DocumentTemplateDefaults
             .terms .terms-body ol { padding-left: 20px; }
             .terms .terms-body li { margin-bottom: 6px; }
 
-            .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 48px; }
-            .signature-block { text-align: center; }
+            table.signatures { width: 100%; margin-top: 48px; }
+            table.signatures td.signature-block { width: 50%; text-align: center; padding: 0 18px; }
             .td-signature-name {
                 font-family: 'Brush Script MT', 'Segoe Script', 'Lucida Handwriting', cursive;
                 font-size: 20pt; color: #1d4ed8; min-height: 30px; line-height: 32px; margin-bottom: -6px;
@@ -94,6 +91,16 @@ class DocumentTemplateDefaults
             CSS;
     }
 
+    /**
+     * Deliberately plain stacked blocks, not a table/flex layout: this
+     * specific fragment is rendered by TCPDF via ThemedPdf::Header()'s
+     * writeHTMLCell() call (a different code path from the main content's
+     * writeHTML()) - a <table> here was confirmed to make TCPDF misjudge
+     * the header's rendered height and silently overlap it with the page
+     * body, garbling both. writeHTML() renders the equivalent info-grid/
+     * signatures tables in the main content just fine, so this
+     * limitation is specific to the header/footer page-callbacks.
+     */
     public static function getHeaderHtml(): string
     {
         return <<<HTML
@@ -116,28 +123,35 @@ class DocumentTemplateDefaults
     public static function getContentHtml(): string
     {
         return <<<HTML
-            <div class="info-grid">
-              <div class="info-item">
-                <label>Colaborador (Recebedor)</label>
-                <div class="value">{{ user.firstname }} {{ user.realname }}</div>
-              </div>
-              <div class="info-item">
-                <label>Login / Matrícula</label>
-                <div class="value">{{ user.name }}</div>
-              </div>
-              <div class="info-item">
-                <label>E-mail corporativo</label>
-                <div class="value">{{ user.email }}</div>
-              </div>
-              <div class="info-item">
-                <label>Responsável pela entrega</label>
-                <div class="value">{{ requester.firstname }} {{ requester.realname }}</div>
-              </div>
-              <div class="info-item">
-                <label>Entidade</label>
-                <div class="value">{{ entity.name }}</div>
-              </div>
-            </div>
+            <table class="info-grid">
+              <tr>
+                <td class="info-item">
+                  <label>Colaborador (Recebedor)</label>
+                  <div class="value">{{ user.firstname }} {{ user.realname }}</div>
+                </td>
+                <td class="info-item">
+                  <label>Login / Matrícula</label>
+                  <div class="value">{{ user.name }}</div>
+                </td>
+              </tr>
+              <tr>
+                <td class="info-item">
+                  <label>E-mail corporativo</label>
+                  <div class="value">{{ user.email }}</div>
+                </td>
+                <td class="info-item">
+                  <label>Responsável pela entrega</label>
+                  <div class="value">{{ requester.firstname }} {{ requester.realname }}</div>
+                </td>
+              </tr>
+              <tr>
+                <td class="info-item">
+                  <label>Entidade</label>
+                  <div class="value">{{ entity.name }}</div>
+                </td>
+                <td class="info-item"></td>
+              </tr>
+            </table>
 
             <div class="intro">
               Pelo presente instrumento, a <strong>{{ entity.name }}</strong> entrega ao(à)
@@ -182,22 +196,24 @@ class DocumentTemplateDefaults
               </div>
             </div>
 
-            <div class="signatures">
-              <div class="signature-block">
-                <div class="td-signature-name" data-td-role="deliverer"></div>
-                <div class="line"></div>
-                <div class="name">{{ requester.firstname }} {{ requester.realname }}</div>
-                <div class="role">Entregador</div>
-                <div class="td-signature-date" data-td-role="deliverer"></div>
-              </div>
-              <div class="signature-block">
-                <div class="td-signature-name" data-td-role="recipient"></div>
-                <div class="line"></div>
-                <div class="name">{{ user.firstname }} {{ user.realname }}</div>
-                <div class="role">Recebedor</div>
-                <div class="td-signature-date" data-td-role="recipient"></div>
-              </div>
-            </div>
+            <table class="signatures">
+              <tr>
+                <td class="signature-block">
+                  <div class="td-signature-name" data-td-role="deliverer"></div>
+                  <div class="line"></div>
+                  <div class="name">{{ requester.firstname }} {{ requester.realname }}</div>
+                  <div class="role">Entregador</div>
+                  <div class="td-signature-date" data-td-role="deliverer"></div>
+                </td>
+                <td class="signature-block">
+                  <div class="td-signature-name" data-td-role="recipient"></div>
+                  <div class="line"></div>
+                  <div class="name">{{ user.firstname }} {{ user.realname }}</div>
+                  <div class="role">Recebedor</div>
+                  <div class="td-signature-date" data-td-role="recipient"></div>
+                </td>
+              </tr>
+            </table>
             HTML;
     }
 
@@ -226,28 +242,35 @@ class DocumentTemplateDefaults
     public static function getReturnContentHtml(): string
     {
         return <<<HTML
-            <div class="info-grid">
-              <div class="info-item">
-                <label>Colaborador (Devolvendo)</label>
-                <div class="value">{{ user.firstname }} {{ user.realname }}</div>
-              </div>
-              <div class="info-item">
-                <label>Login / Matrícula</label>
-                <div class="value">{{ user.name }}</div>
-              </div>
-              <div class="info-item">
-                <label>E-mail corporativo</label>
-                <div class="value">{{ user.email }}</div>
-              </div>
-              <div class="info-item">
-                <label>Recebido por (TI)</label>
-                <div class="value">{{ requester.firstname }} {{ requester.realname }}</div>
-              </div>
-              <div class="info-item">
-                <label>Entidade</label>
-                <div class="value">{{ entity.name }}</div>
-              </div>
-            </div>
+            <table class="info-grid">
+              <tr>
+                <td class="info-item">
+                  <label>Colaborador (Devolvendo)</label>
+                  <div class="value">{{ user.firstname }} {{ user.realname }}</div>
+                </td>
+                <td class="info-item">
+                  <label>Login / Matrícula</label>
+                  <div class="value">{{ user.name }}</div>
+                </td>
+              </tr>
+              <tr>
+                <td class="info-item">
+                  <label>E-mail corporativo</label>
+                  <div class="value">{{ user.email }}</div>
+                </td>
+                <td class="info-item">
+                  <label>Recebido por (TI)</label>
+                  <div class="value">{{ requester.firstname }} {{ requester.realname }}</div>
+                </td>
+              </tr>
+              <tr>
+                <td class="info-item">
+                  <label>Entidade</label>
+                  <div class="value">{{ entity.name }}</div>
+                </td>
+                <td class="info-item"></td>
+              </tr>
+            </table>
 
             <div class="intro">
               Pelo presente instrumento, o(a) colaborador(a) acima identificado(a) devolve à
@@ -292,22 +315,24 @@ class DocumentTemplateDefaults
               </div>
             </div>
 
-            <div class="signatures">
-              <div class="signature-block">
-                <div class="td-signature-name" data-td-role="recipient"></div>
-                <div class="line"></div>
-                <div class="name">{{ user.firstname }} {{ user.realname }}</div>
-                <div class="role">Colaborador (devolvendo)</div>
-                <div class="td-signature-date" data-td-role="recipient"></div>
-              </div>
-              <div class="signature-block">
-                <div class="td-signature-name" data-td-role="deliverer"></div>
-                <div class="line"></div>
-                <div class="name">{{ requester.firstname }} {{ requester.realname }}</div>
-                <div class="role">Recebido por (TI)</div>
-                <div class="td-signature-date" data-td-role="deliverer"></div>
-              </div>
-            </div>
+            <table class="signatures">
+              <tr>
+                <td class="signature-block">
+                  <div class="td-signature-name" data-td-role="recipient"></div>
+                  <div class="line"></div>
+                  <div class="name">{{ user.firstname }} {{ user.realname }}</div>
+                  <div class="role">Colaborador (devolvendo)</div>
+                  <div class="td-signature-date" data-td-role="recipient"></div>
+                </td>
+                <td class="signature-block">
+                  <div class="td-signature-name" data-td-role="deliverer"></div>
+                  <div class="line"></div>
+                  <div class="name">{{ requester.firstname }} {{ requester.realname }}</div>
+                  <div class="role">Recebido por (TI)</div>
+                  <div class="td-signature-date" data-td-role="deliverer"></div>
+                </td>
+              </tr>
+            </table>
             HTML;
     }
 }

@@ -124,7 +124,7 @@
 
         <h5>{{ __('Pré-visualização do conteúdo', 'termodocs') }}</h5>
         <iframe class="termodocs-preview-frame" style="width:100%;min-height:600px;border:1px solid #dee2e6"
-            srcdoc="{{ ('<style>' ~ item.fields.theme_css_snapshot ~ '</style>' ~ item.composeSignedHtml() ~ conditions_preview_html)|escape('html_attr') }}">
+            srcdoc="{{ ('<style>' ~ item.fields.theme_css_snapshot ~ '</style>' ~ item.composeSignedHtml(conditions_preview_html))|escape('html_attr') }}">
         </iframe>
 
         {% if is_admin and item.isExternallySigned() and item.fields.external_payload %}

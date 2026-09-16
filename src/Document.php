@@ -139,9 +139,22 @@ class Document extends CommonDBTM
      * Nothing is persisted; call this wherever the document is *shown*,
      * never store the result back into `rendered_html`.
      */
-    public function composeSignedHtml(): string
+    /**
+     * $extra_content_html (e.g. buildConditionsSectionHtml()'s table) is
+     * spliced in right before the closing `.td-footer` div, matching
+     * exactly where DocumentGenerator::regeneratePdfWithConditions()
+     * appends the same block to the PDF's content before composing -
+     * otherwise the web preview would show it dropped after the whole
+     * page (outside the styled .td-page wrapper), while the PDF shows it
+     * inside the content area, and the two would visibly disagree.
+     */
+    public function composeSignedHtml(string $extra_content_html = ''): string
     {
         $html = (string) ($this->fields['rendered_html'] ?? '');
+
+        if ($extra_content_html !== '') {
+            $html = str_replace('<div class="td-footer">', $extra_content_html . '<div class="td-footer">', $html);
+        }
 
         foreach (['recipient' => Acceptance::ROLE_RECIPIENT, 'deliverer' => Acceptance::ROLE_DELIVERER] as $marker => $role) {
             $acceptance = Acceptance::getForRole((int) $this->fields['id'], $role);
@@ -420,14 +433,31 @@ class Document extends CommonDBTM
     public static function buildConditionsSectionHtml(self $document, array $linked_items): string
     {
         $condition_labels = self::getConditionOptions();
+        // Inline (not CSS-class-based) so the color survives both TCPDF
+        // (which never sees theme_css_snapshot's own classes here) and
+        // the web preview, exactly the same way in both places.
+        $condition_colors = [
+            'bom'     => ['background' => '#dcfce7', 'color' => '#166534'],
+            'regular' => ['background' => '#ffedd5', 'color' => '#9a3412'],
+            'ruim'    => ['background' => '#fee2e2', 'color' => '#991b1b'],
+        ];
+        $default_color = ['background' => '#f3f4f6', 'color' => '#6b7280'];
 
         $rows = '';
         foreach ($linked_items as $linked) {
             $label = htmlspecialchars(
                 (string) ($linked['item_alias'] ?: self::describeItemForExport($linked['itemtype'], (int) $linked['items_id']))
             );
-            $condition_label = $condition_labels[$linked['condition'] ?? ''] ?? __('Não avaliado', 'termodocs');
-            $rows .= '<tr><td>' . $label . '</td><td>' . htmlspecialchars($condition_label) . '</td></tr>';
+            $condition = $linked['condition'] ?? null;
+            $condition_label = $condition_labels[$condition] ?? __('Não avaliado', 'termodocs');
+            $color = $condition_colors[$condition] ?? $default_color;
+
+            $badge = '<span style="display:inline-block;padding:2px 10px;border-radius:10px;'
+                . 'background:' . $color['background'] . ';color:' . $color['color'] . ';">'
+                . htmlspecialchars($condition_label) . '</span>';
+
+            $rows .= '<tr><td style="padding:6px 4px;border-bottom:1px solid #e5e7eb;">' . $label . '</td>'
+                . '<td style="padding:6px 4px;border-bottom:1px solid #e5e7eb;">' . $badge . '</td></tr>';
         }
 
         $notes = trim((string) ($document->fields['notes'] ?? ''));

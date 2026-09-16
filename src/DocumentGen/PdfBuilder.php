@@ -33,16 +33,33 @@ class PdfBuilder
         $style = '<style>' . $css . '</style>';
         $background_path = $template?->getBackgroundFilePath();
 
+        // The header is deliberately NOT passed to ThemedPdf as a
+        // repeating page header: TCPDF's Header() callback draws within a
+        // fixed-height band (margin_top/margin_header) that does not
+        // adapt to how tall the header HTML actually renders, so
+        // anything beyond a single short line (a real entity name +
+        // title + date reliably needs 3-4 lines) gets silently drawn
+        // UNDER the page's main content instead of pushing it down -
+        // confirmed by direct PDF inspection, and unaffected by
+        // increasing those margins. Folding it into the same writeHTML()
+        // call as the body sidesteps that entirely (this is the same
+        // pipeline that already lays out the info-grid/signatures tables
+        // correctly) at the cost of the header no longer repeating on
+        // page 2+ - an acceptable trade for a document that is almost
+        // always one page. The footer/background stay as real page
+        // callbacks since those never showed this problem.
         $pdf = new ThemedPdf(
             ['orientation' => 'P', 'format' => 'A4'],
             $title,
-            $style . '<div class="td-header">' . $this->normalizeForTcpdf($header_html) . '</div>',
+            '',
             $style . '<div class="td-footer">' . $this->normalizeForTcpdf($footer_html) . '</div>',
             $background_path
         );
 
         $pdf->writeHTML(
-            $style . '<div class="td-content">' . $this->normalizeForTcpdf($content_html) . '</div>',
+            $style
+                . '<div class="td-header">' . $this->normalizeForTcpdf($header_html) . '</div>'
+                . '<div class="td-content">' . $this->normalizeForTcpdf($content_html) . '</div>',
             true,
             false,
             true,
