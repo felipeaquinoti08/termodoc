@@ -83,7 +83,7 @@
                         <tbody>
                             {% for linked in items %}
                                 <tr>
-                                    <td>{{ linked.item_alias ?: (linked.itemtype ~ ' #' ~ linked.items_id) }}</td>
+                                    <td>{{ linked.display_name }}</td>
                                     <td>
                                         <select name="condition[{{ linked.id }}]" class="form-select form-select-sm">
                                             <option value="">{{ __('Não avaliado', 'termodocs') }}</option>
@@ -109,7 +109,7 @@
                 <ul>
                     {% for linked in items %}
                         <li>
-                            {{ linked.item_alias ?: (linked.itemtype ~ ' #' ~ linked.items_id) }}
+                            {{ linked.display_name }}
                             {% if linked.condition_label %}
                                 <span class="badge {{ linked.condition_class }}">{{ linked.condition_label }}</span>
                             {% endif %}

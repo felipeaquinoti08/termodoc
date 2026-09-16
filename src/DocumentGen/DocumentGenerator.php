@@ -183,7 +183,9 @@ class DocumentGenerator
 
         $rows = '';
         foreach ($linked_items as $linked) {
-            $label = htmlspecialchars((string) ($linked['item_alias'] ?: ($linked['itemtype'] . ' #' . $linked['items_id'])));
+            $label = htmlspecialchars(
+                (string) ($linked['item_alias'] ?: Document::describeItemForExport($linked['itemtype'], (int) $linked['items_id']))
+            );
             $condition_label = $condition_labels[$linked['condition'] ?? ''] ?? __('Não avaliado', 'termodocs');
             $rows .= '<tr><td>' . $label . '</td><td>' . htmlspecialchars($condition_label) . '</td></tr>';
         }

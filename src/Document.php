@@ -415,6 +415,8 @@ class Document extends CommonDBTM
         $classes = ['bom' => 'bg-green-lt', 'regular' => 'bg-orange-lt', 'ruim' => 'bg-red-lt'];
 
         foreach ($items as &$linked) {
+            $linked['display_name'] = $linked['item_alias'] ?: self::describeItemForExport($linked['itemtype'], (int) $linked['items_id']);
+
             $condition = $linked['condition'] ?? null;
             if ($condition === null || !isset($options[$condition])) {
                 $linked['condition_label'] = null;
@@ -643,7 +645,15 @@ class Document extends CommonDBTM
         ];
     }
 
-    private static function describeItemForExport(string $itemtype, int $items_id): string
+    /**
+     * A human-readable "Tipo: Nome" label for an asset - originally just
+     * for exportAll() (see its own doc comment), now also reused by
+     * decorateItemsWithCondition() for the same reason: item_alias is
+     * only ever populated by DocumentImporter for cross-instance
+     * documents, so a normally-generated document's linked items have
+     * nothing better to fall back to than "Itemtype #id" without this.
+     */
+    public static function describeItemForExport(string $itemtype, int $items_id): string
     {
         if (!class_exists($itemtype) || !is_a($itemtype, CommonDBTM::class, true)) {
             return $itemtype . ' #' . $items_id;
