@@ -203,6 +203,26 @@ class AssineiApiClient
     }
 
     /**
+     * Downloads a file from an absolute URL such as
+     * getDocument()'s urlDocumentoAssinado/urlDocumento - unlike every
+     * other method here this is NOT a relative path under the API's
+     * base_url: Assinei hands back full Azure Blob Storage URLs with
+     * their own embedded SAS signature (already valid for an anonymous
+     * GET), so this bypasses request()'s auth/X-Tenant headers and
+     * base_url prefixing entirely.
+     */
+    public function downloadFile(string $url): string
+    {
+        try {
+            $response = $this->client()->get($url);
+        } catch (GuzzleException $e) {
+            throw AssineiApiException::fromGuzzleException('GET', $url, $e);
+        }
+
+        return (string) $response->getBody();
+    }
+
+    /**
      * GET /v1/Cofre/GetAll - confirmed (against a real tenant) to hang
      * until timeout in production; not called from anywhere in the
      * plugin. Left here only in case Assinei fixes it later - use

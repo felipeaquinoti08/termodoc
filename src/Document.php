@@ -253,6 +253,9 @@ class Document extends CommonDBTM
                 echo '<a class="btn btn-outline-secondary btn-sm" href="' . $CFG_GLPI['root_doc'] .
                     '/plugins/termodocs/front/document.import.php"><i class="ti ti-upload"></i> ' .
                     __('Importar', 'termodocs') . '</a>';
+                echo '<a class="btn btn-outline-secondary btn-sm" href="' . $CFG_GLPI['root_doc'] .
+                    '/plugins/termodocs/front/document.import_assinei.php"><i class="ti ti-file-import"></i> ' .
+                    __('Importar do Assinei.digital', 'termodocs') . '</a>';
                 echo '</div>';
             }
             Search::show(self::class);
