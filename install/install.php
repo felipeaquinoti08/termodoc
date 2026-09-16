@@ -97,7 +97,7 @@ function plugin_termodocs_install_run(): bool
             `items_id` int {$default_key_sign} NOT NULL DEFAULT '0',
             `item_alias` varchar(64) DEFAULT NULL,
             `item_snapshot` text,
-            `condition_ok` tinyint DEFAULT NULL,
+            `condition` varchar(10) DEFAULT NULL,
             `date_creation` timestamp NULL DEFAULT NULL,
             `date_mod` timestamp NULL DEFAULT NULL,
             PRIMARY KEY (`id`),
@@ -304,14 +304,18 @@ function migrate_termodocs_add_external_signature_fields(): void
 
 /**
  * Post-handover condition tracking: a general note on the document
- * itself, plus a per-item "received in good condition" checkbox - filled
- * in from the document's own page after it exists (see
+ * itself, plus a per-item condition ('bom'/'regular'/'ruim') - filled in
+ * from the document's own page after it exists (see
  * front/document.form.php's save_notes action), independent of the
- * signature flow. Touches both glpi_plugin_termodocs_documents (`notes`)
- * and glpi_plugin_termodocs_documents_items (`condition_ok`), so this is
+ * signature flow, and baked into a regenerated PDF at that point (see
+ * DocumentGenerator::regeneratePdfWithConditions()). Touches both
+ * glpi_plugin_termodocs_documents (`notes`) and
+ * glpi_plugin_termodocs_documents_items (`condition`), so this is
  * called from both tables' branches in the install function above -
- * each ALTER is its own fieldExists guard, so calling it twice per run
- * is harmless. Safe to re-run.
+ * each ALTER is its own guard, so calling it twice per run is harmless.
+ * `condition_ok` (a first cut of this same feature, a plain
+ * good/not-good checkbox) is dropped in favor of `condition` if an
+ * earlier version of this migration already added it. Safe to re-run.
  */
 function migrate_termodocs_add_condition_tracking(): void
 {
@@ -321,8 +325,13 @@ function migrate_termodocs_add_condition_tracking(): void
         $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents` ADD COLUMN `notes` text AFTER `date_finalized`");
     }
 
-    if ($DB->tableExists('glpi_plugin_termodocs_documents_items') && !$DB->fieldExists('glpi_plugin_termodocs_documents_items', 'condition_ok')) {
-        $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents_items` ADD COLUMN `condition_ok` tinyint DEFAULT NULL AFTER `item_snapshot`");
+    if ($DB->tableExists('glpi_plugin_termodocs_documents_items')) {
+        if ($DB->fieldExists('glpi_plugin_termodocs_documents_items', 'condition_ok')) {
+            $DB->doQuery('ALTER TABLE `glpi_plugin_termodocs_documents_items` DROP COLUMN `condition_ok`');
+        }
+        if (!$DB->fieldExists('glpi_plugin_termodocs_documents_items', 'condition')) {
+            $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents_items` ADD COLUMN `condition` varchar(10) DEFAULT NULL AFTER `item_snapshot`");
+        }
     }
 }
 

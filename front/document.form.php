@@ -161,12 +161,23 @@ if (isset($_POST['do_generate'])) {
         'notes' => trim((string) ($_POST['notes'] ?? '')),
     ]);
 
-    $checked = $_POST['condition'] ?? [];
+    $valid_conditions = array_keys(Document::getConditionOptions());
+    $submitted = $_POST['condition'] ?? [];
     foreach (Document_Item::getItemsForDocument($document->getID()) as $linked) {
+        $condition = (string) ($submitted[$linked['id']] ?? '');
         (new Document_Item())->update([
-            'id'           => $linked['id'],
-            'condition_ok' => isset($checked[$linked['id']]) ? 1 : 0,
+            'id'        => $linked['id'],
+            'condition' => in_array($condition, $valid_conditions, true) ? $condition : null,
         ]);
+    }
+
+    // Bakes the just-saved condition/notes into a fresh copy of the PDF -
+    // never touches rendered_html/content_hash (the frozen legal text
+    // itself stays exactly as generated), only the downloadable file.
+    $document->getFromDB($document->getID());
+    $new_pdf_id = DocumentGenerator::getInstance()->regeneratePdfWithConditions($document);
+    if ($new_pdf_id > 0) {
+        $document->update(['id' => $document->getID(), 'pdf_document_id' => $new_pdf_id]);
     }
 
     Html::redirect(Document::getFormURLWithID($document->getID()));

@@ -79,18 +79,23 @@
                 <form method="post" action="{{ config('root_doc') }}/plugins/termodocs/front/document.form.php">
                     <input type="hidden" name="id" value="{{ item.getID() }}">
                     {{ fields.csrfField() }}
-                    <ul class="list-unstyled mb-2">
-                        {% for linked in items %}
-                            <li class="form-check mb-1">
-                                <input type="checkbox" class="form-check-input" id="termodocs-cond-{{ linked.id }}"
-                                       name="condition[{{ linked.id }}]" value="1"{{ linked.condition_ok == 1 ? ' checked' : '' }}>
-                                <label class="form-check-label" for="termodocs-cond-{{ linked.id }}">
-                                    {{ linked.item_alias ?: (linked.itemtype ~ ' #' ~ linked.items_id) }}
-                                    - {{ __('Em boas condições', 'termodocs') }}
-                                </label>
-                            </li>
-                        {% endfor %}
-                    </ul>
+                    <table class="table table-sm w-auto mb-2">
+                        <tbody>
+                            {% for linked in items %}
+                                <tr>
+                                    <td>{{ linked.item_alias ?: (linked.itemtype ~ ' #' ~ linked.items_id) }}</td>
+                                    <td>
+                                        <select name="condition[{{ linked.id }}]" class="form-select form-select-sm">
+                                            <option value="">{{ __('Não avaliado', 'termodocs') }}</option>
+                                            {% for value, label in condition_options %}
+                                                <option value="{{ value }}"{{ linked.condition == value ? ' selected' : '' }}>{{ label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                     <div class="mb-2" style="max-width:500px">
                         <label class="form-label">{{ __('Observações', 'termodocs') }}</label>
                         <textarea name="notes" class="form-control" rows="3">{{ item.fields.notes }}</textarea>
@@ -98,6 +103,7 @@
                     <button type="submit" name="save_notes" class="btn btn-outline-primary btn-sm">
                         <i class="ti ti-device-floppy"></i> {{ __('Salvar observações', 'termodocs') }}
                     </button>
+                    <div class="form-text">{{ __('Ao salvar, o PDF é atualizado com a condição de cada equipamento e as observações.', 'termodocs') }}</div>
                 </form>
             {% else %}
                 <ul>

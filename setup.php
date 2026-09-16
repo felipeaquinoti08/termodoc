@@ -11,7 +11,7 @@ use GlpiPlugin\Termodocs\Profile as TermodocsProfile;
 use GlpiPlugin\Termodocs\Signature\AssineiDigitalProvider;
 use GlpiPlugin\Termodocs\Signature\SignatureProviderManager;
 
-define('PLUGIN_TERMODOCS_VERSION', '1.4.0');
+define('PLUGIN_TERMODOCS_VERSION', '1.5.0');
 define('PLUGIN_TERMODOCS_MIN_GLPI_VERSION', '11.0.0');
 define('PLUGIN_TERMODOCS_MAX_GLPI_VERSION', '11.9.99');
 

@@ -111,4 +111,98 @@ class DocumentGenerator
 
         return $document;
     }
+
+    /**
+     * Rebuilds the downloadable PDF to include the per-item condition
+     * and general notes recorded from the document's own page (see
+     * front/document.form.php's save_notes action) - called every time
+     * those are saved. Deliberately never touches rendered_html/
+     * content_hash: that frozen pair is the legal record of exactly what
+     * was generated/signed, and condition/notes are recorded afterwards
+     * (typically at physical handover), so they only ever affect this
+     * regenerated file, never the original record. Re-renders
+     * header/footer from the template fresh rather than reusing anything
+     * cached, the same way generate() does the first time; if the
+     * template was since deleted, falls back to empty header/footer
+     * (rare - only for documents whose template was later removed).
+     *
+     * @return int the new pdf_document_id (glpi_documents.id), or 0 if
+     *   the PDF couldn't be rebuilt (e.g. no items resolvable at all)
+     */
+    public function regeneratePdfWithConditions(Document $document): int
+    {
+        $template = new DocumentTemplate();
+        $has_template = $template->getFromDB((int) $document->fields['plugin_termodocs_templates_id']);
+
+        $recipient = new User();
+        $recipient->getFromDB((int) $document->fields['users_id_recipient']);
+        $deliverer = new User();
+        $deliverer->getFromDB((int) $document->fields['users_id_deliverer']);
+
+        $linked_items = Document_Item::getItemsForDocument($document->getID());
+        $items = [];
+        foreach ($linked_items as $linked) {
+            $items[] = [$linked['itemtype'], (int) $linked['items_id']];
+        }
+
+        $context = (new ContextResolver())->resolve(
+            $items,
+            $recipient,
+            $deliverer,
+            (int) $document->fields['entities_id'],
+            [
+                'date' => substr((string) $document->fields['date_generated'], 0, 10) ?: date('Y-m-d'),
+                'name' => $document->fields['name'],
+            ]
+        );
+
+        $renderer = TemplateRenderer::getInstance();
+        $rendered_header = $has_template ? $renderer->render($template->fields['header_html'] ?? '', $context) : '';
+        $rendered_content = $has_template ? $renderer->render($template->fields['content_html'] ?? '', $context) : '';
+        $rendered_footer = $has_template ? $renderer->render($template->fields['footer_html'] ?? '', $context) : '';
+
+        $rendered_content .= $this->buildConditionsSectionHtml($document, $linked_items);
+
+        return (new PdfBuilder())->buildFromHtml(
+            $rendered_header,
+            $rendered_content,
+            $rendered_footer,
+            $has_template ? $template : null,
+            $document->fields['name'],
+            (int) $document->fields['entities_id']
+        );
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $linked_items rows from
+     *   Document_Item::getItemsForDocument()
+     */
+    private function buildConditionsSectionHtml(Document $document, array $linked_items): string
+    {
+        $condition_labels = Document::getConditionOptions();
+
+        $rows = '';
+        foreach ($linked_items as $linked) {
+            $label = htmlspecialchars((string) ($linked['item_alias'] ?: ($linked['itemtype'] . ' #' . $linked['items_id'])));
+            $condition_label = $condition_labels[$linked['condition'] ?? ''] ?? __('Não avaliado', 'termodocs');
+            $rows .= '<tr><td>' . $label . '</td><td>' . htmlspecialchars($condition_label) . '</td></tr>';
+        }
+
+        $notes = trim((string) ($document->fields['notes'] ?? ''));
+
+        $html = '<div class="td-conditions" style="margin-top:24px;">'
+            . '<h3>' . __('Condição dos Equipamentos', 'termodocs') . '</h3>'
+            . '<table style="width:100%;border-collapse:collapse;font-size:10pt;">'
+            . '<thead><tr>'
+            . '<th style="text-align:left;border-bottom:1px solid #333;padding:4px;">' . __('Equipamento', 'termodocs') . '</th>'
+            . '<th style="text-align:left;border-bottom:1px solid #333;padding:4px;">' . __('Condição', 'termodocs') . '</th>'
+            . '</tr></thead><tbody>' . $rows . '</tbody></table>';
+
+        if ($notes !== '') {
+            $html .= '<p style="margin-top:12px;"><strong>' . __('Observações:', 'termodocs') . '</strong> '
+                . nl2br(htmlspecialchars($notes)) . '</p>';
+        }
+
+        return $html . '</div>';
+    }
 }

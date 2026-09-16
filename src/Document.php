@@ -389,22 +389,39 @@ class Document extends CommonDBTM
     }
 
     /**
+     * Options for the per-item condition picker (document's own page)
+     * and the PDF's condition table - shared here so both stay in sync
+     * with the same three values/labels.
+     *
+     * @return array<string,string> value => label
+     */
+    public static function getConditionOptions(): array
+    {
+        return [
+            'bom'     => __('Bom', 'termodocs'),
+            'regular' => __('Regular', 'termodocs'),
+            'ruim'    => __('Ruim', 'termodocs'),
+        ];
+    }
+
+    /**
      * @param array<int,array<string,mixed>> $items rows from
      *   Document_Item::getItemsForDocument()
      * @return array<int,array<string,mixed>>
      */
     private static function decorateItemsWithCondition(array $items): array
     {
+        $options = self::getConditionOptions();
+        $classes = ['bom' => 'bg-green-lt', 'regular' => 'bg-orange-lt', 'ruim' => 'bg-red-lt'];
+
         foreach ($items as &$linked) {
-            if ($linked['condition_ok'] === null) {
+            $condition = $linked['condition'] ?? null;
+            if ($condition === null || !isset($options[$condition])) {
                 $linked['condition_label'] = null;
                 $linked['condition_class'] = null;
-            } elseif ((int) $linked['condition_ok'] === 1) {
-                $linked['condition_label'] = __('Boas condições', 'termodocs');
-                $linked['condition_class'] = 'bg-green-lt';
             } else {
-                $linked['condition_label'] = __('Com avaria', 'termodocs');
-                $linked['condition_class'] = 'bg-red-lt';
+                $linked['condition_label'] = $options[$condition];
+                $linked['condition_class'] = $classes[$condition];
             }
         }
         unset($linked);
@@ -536,6 +553,7 @@ class Document extends CommonDBTM
             // (see canViewItem()), but that technical detail is only
             // useful to whoever administers the integration.
             'is_admin'            => Session::haveRight(self::$rightname, READ),
+            'condition_options'   => self::getConditionOptions(),
         ]);
 
         return true;
