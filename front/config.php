@@ -164,28 +164,6 @@ function termodocs_run_git(array $args): array
     return [$return_code, implode("\n", $output)];
 }
 
-/**
- * GLPI's Twig template cache (compiled .twig -> PHP) does not
- * auto-reload in production (Environment::shouldExpectResourcesToChange()
- * is false there - see src/Glpi/Application/View/TemplateRenderer.php),
- * so a `git pull` that changes one of this plugin's own .twig files
- * (not a DocumentTemplate's content, which is DB-stored and rendered
- * through a separate sandboxed Twig instance) would otherwise keep
- * rendering the pre-pull version until this cache is cleared - confirmed
- * live: a template change landed correctly in code/DB but kept showing
- * the old layout until `cache:clear` ran. Best-effort: a failure here
- * doesn't undo the already-successful git pull/reinstall above, it just
- * means a stale template might linger until cleared manually via
- * Configurar > Geral or `bin/console cache:clear`.
- */
-function termodocs_clear_glpi_cache(): array
-{
-    $php = escapeshellarg(PHP_BINARY);
-    $console = escapeshellarg(termodocs_plugin_dir() . '/../../bin/console');
-    exec("$php $console cache:clear --allow-superuser -n 2>&1", $output, $return_code);
-    return [$return_code, implode("\n", $output)];
-}
-
 $update_pending_log = null;
 $update_apply_output = null;
 
@@ -245,14 +223,20 @@ if (isset($_GET['updated'])) {
         }
     }
 
-    [$cache_clear_code, $cache_clear_output] = termodocs_clear_glpi_cache();
-    if ($cache_clear_code !== 0) {
-        Session::addMessageAfterRedirect(
-            sprintf(__('Atualizado, mas não consegui limpar o cache automaticamente: %s', 'termodocs'), $cache_clear_output),
-            false,
-            WARNING
-        );
-    }
+    // GLPI's Twig template cache doesn't auto-reload in production, so a
+    // pull that changed one of this plugin's own .twig files may keep
+    // rendering the pre-pull version until it's cleared - PHP_BINARY
+    // can't be trusted to find a usable `php` CLI here (this code runs
+    // inside a PHP-FPM worker, where PHP_BINARY resolves to the
+    // php-fpm binary itself, not php - confirmed live, it just printed
+    // php-fpm's own --help), so this is a manual step instead of an
+    // automatic one: run `bin/console cache:clear` after applying an
+    // update whose commit touched a .twig file.
+    Session::addMessageAfterRedirect(
+        __('Atualizado e reinstalado. Se a atualização mudou algum template (.twig) do plugin, rode "php bin/console cache:clear" no servidor para o GLPI parar de mostrar a versão antiga.', 'termodocs'),
+        false,
+        INFO
+    );
 }
 
 Html::header(__('Termodocs', 'termodocs'));
