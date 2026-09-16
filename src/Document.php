@@ -405,6 +405,47 @@ class Document extends CommonDBTM
     }
 
     /**
+     * The same "Condição dos Equipamentos" block used two places: baked
+     * into the regenerated PDF (DocumentGenerator::regeneratePdfWithConditions())
+     * and appended to the web preview iframe (showForm() below) - a
+     * single source of truth so the on-screen preview never drifts from
+     * what the downloaded PDF actually shows.
+     *
+     * @param array<int,array<string,mixed>> $linked_items rows from
+     *   Document_Item::getItemsForDocument()
+     */
+    public static function buildConditionsSectionHtml(self $document, array $linked_items): string
+    {
+        $condition_labels = self::getConditionOptions();
+
+        $rows = '';
+        foreach ($linked_items as $linked) {
+            $label = htmlspecialchars(
+                (string) ($linked['item_alias'] ?: self::describeItemForExport($linked['itemtype'], (int) $linked['items_id']))
+            );
+            $condition_label = $condition_labels[$linked['condition'] ?? ''] ?? __('Não avaliado', 'termodocs');
+            $rows .= '<tr><td>' . $label . '</td><td>' . htmlspecialchars($condition_label) . '</td></tr>';
+        }
+
+        $notes = trim((string) ($document->fields['notes'] ?? ''));
+
+        $html = '<div class="td-conditions" style="margin-top:24px;">'
+            . '<h3>' . __('Condição dos Equipamentos', 'termodocs') . '</h3>'
+            . '<table style="width:100%;border-collapse:collapse;font-size:10pt;">'
+            . '<thead><tr>'
+            . '<th style="text-align:left;border-bottom:1px solid #333;padding:4px;">' . __('Equipamento', 'termodocs') . '</th>'
+            . '<th style="text-align:left;border-bottom:1px solid #333;padding:4px;">' . __('Condição', 'termodocs') . '</th>'
+            . '</tr></thead><tbody>' . $rows . '</tbody></table>';
+
+        if ($notes !== '') {
+            $html .= '<p style="margin-top:12px;"><strong>' . __('Observações:', 'termodocs') . '</strong> '
+                . nl2br(htmlspecialchars($notes)) . '</p>';
+        }
+
+        return $html . '</div>';
+    }
+
+    /**
      * @param array<int,array<string,mixed>> $items rows from
      *   Document_Item::getItemsForDocument()
      * @return array<int,array<string,mixed>>
@@ -556,6 +597,11 @@ class Document extends CommonDBTM
             // useful to whoever administers the integration.
             'is_admin'            => Session::haveRight(self::$rightname, READ),
             'condition_options'   => self::getConditionOptions(),
+            // Appended to the preview iframe below (never stored back
+            // into rendered_html) so the on-screen preview matches what
+            // "Salvar observações" just baked into the downloadable PDF -
+            // same builder, see buildConditionsSectionHtml()'s own comment.
+            'conditions_preview_html' => empty($items) ? '' : self::buildConditionsSectionHtml($this, $items),
         ]);
 
         return true;

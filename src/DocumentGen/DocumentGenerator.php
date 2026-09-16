@@ -161,7 +161,7 @@ class DocumentGenerator
         $rendered_content = $has_template ? $renderer->render($template->fields['content_html'] ?? '', $context) : '';
         $rendered_footer = $has_template ? $renderer->render($template->fields['footer_html'] ?? '', $context) : '';
 
-        $rendered_content .= $this->buildConditionsSectionHtml($document, $linked_items);
+        $rendered_content .= Document::buildConditionsSectionHtml($document, $linked_items);
 
         return (new PdfBuilder())->buildFromHtml(
             $rendered_header,
@@ -173,38 +173,4 @@ class DocumentGenerator
         );
     }
 
-    /**
-     * @param array<int,array<string,mixed>> $linked_items rows from
-     *   Document_Item::getItemsForDocument()
-     */
-    private function buildConditionsSectionHtml(Document $document, array $linked_items): string
-    {
-        $condition_labels = Document::getConditionOptions();
-
-        $rows = '';
-        foreach ($linked_items as $linked) {
-            $label = htmlspecialchars(
-                (string) ($linked['item_alias'] ?: Document::describeItemForExport($linked['itemtype'], (int) $linked['items_id']))
-            );
-            $condition_label = $condition_labels[$linked['condition'] ?? ''] ?? __('Não avaliado', 'termodocs');
-            $rows .= '<tr><td>' . $label . '</td><td>' . htmlspecialchars($condition_label) . '</td></tr>';
-        }
-
-        $notes = trim((string) ($document->fields['notes'] ?? ''));
-
-        $html = '<div class="td-conditions" style="margin-top:24px;">'
-            . '<h3>' . __('Condição dos Equipamentos', 'termodocs') . '</h3>'
-            . '<table style="width:100%;border-collapse:collapse;font-size:10pt;">'
-            . '<thead><tr>'
-            . '<th style="text-align:left;border-bottom:1px solid #333;padding:4px;">' . __('Equipamento', 'termodocs') . '</th>'
-            . '<th style="text-align:left;border-bottom:1px solid #333;padding:4px;">' . __('Condição', 'termodocs') . '</th>'
-            . '</tr></thead><tbody>' . $rows . '</tbody></table>';
-
-        if ($notes !== '') {
-            $html .= '<p style="margin-top:12px;"><strong>' . __('Observações:', 'termodocs') . '</strong> '
-                . nl2br(htmlspecialchars($notes)) . '</p>';
-        }
-
-        return $html . '</div>';
-    }
 }
