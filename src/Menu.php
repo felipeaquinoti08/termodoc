@@ -15,12 +15,12 @@ class Menu extends CommonGLPI
 {
     public static function getTypeName($nb = 0): string
     {
-        return __('Termodocs', 'termodocs');
+        return __('Termos', 'termodocs');
     }
 
     public static function getMenuName(): string
     {
-        return __('Termodocs', 'termodocs');
+        return __('Termos', 'termodocs');
     }
 
     public static function getIcon(): string

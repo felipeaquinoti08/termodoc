@@ -185,7 +185,43 @@ function plugin_termodocs_install_run(): bool
         ]
     );
 
+    migrate_termodocs_add_default_status_column();
+
     return true;
+}
+
+/**
+ * Makes "Status" (search option 11 - Aguardando aceite/Aceito/Recusado/
+ * Cancelado, i.e. exactly the signatures' aggregate status) show up in
+ * the Document listing without every admin having to add it by hand via
+ * "Configurar colunas exibidas". users_id=0 is GLPI's own convention for
+ * "default for everyone who hasn't set a personal preference" (see
+ * DisplayPreference::getForTypeUser()) - never touches anyone's actual
+ * personal column choices. Safe to re-run (checked by exact row first).
+ */
+function migrate_termodocs_add_default_status_column(): void
+{
+    global $DB;
+
+    $exists = $DB->request([
+        'FROM'  => 'glpi_displaypreferences',
+        'WHERE' => [
+            'itemtype'  => \GlpiPlugin\Termodocs\Document::class,
+            'num'       => 11,
+            'users_id'  => 0,
+            'interface' => 'central',
+        ],
+    ])->count() > 0;
+
+    if (!$exists) {
+        $DB->insert('glpi_displaypreferences', [
+            'itemtype'  => \GlpiPlugin\Termodocs\Document::class,
+            'num'       => 11,
+            'rank'      => 1,
+            'users_id'  => 0,
+            'interface' => 'central',
+        ]);
+    }
 }
 
 /**
