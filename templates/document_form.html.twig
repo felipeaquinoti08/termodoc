@@ -72,6 +72,13 @@
         {% if waiting_externally %}
             <div class="alert alert-info">{{ __('A assinatura deste documento é feita fora do GLPI, através de', 'termodocs') }} {{ signature_provider_label }}. {{ __('Verifique seu e-mail para o link de assinatura.', 'termodocs') }}</div>
         {% endif %}
+        {% if outstanding_accessory_labels is not empty %}
+            <div class="alert alert-warning">
+                <i class="ti ti-alert-triangle"></i>
+                {{ __('Atenção: %s possui os seguintes acessórios entregues anteriormente sem registro de devolução:', 'termodocs')|format(recipient.getFriendlyName()) }}
+                <strong>{{ outstanding_accessory_labels|join(', ') }}</strong>
+            </div>
+        {% endif %}
 
         {% if items is not empty %}
             <h5>{{ _n('Ativo vinculado', 'Ativos vinculados', 2, 'termodocs') }}</h5>

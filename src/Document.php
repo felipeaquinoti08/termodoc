@@ -545,6 +545,47 @@ class Document extends CommonDBTM
     }
 
     /**
+     * Walks every non-deleted document this user has ever been the
+     * recipient of, oldest first, tracking each accessory key's
+     * delivered/returned state: checked on an Entrega marks it
+     * outstanding, checked on a Devolução clears it. Whatever is still
+     * outstanding at the end is "delivered at some point, never
+     * confirmed returned" - shown as a warning on a document's own page
+     * (see showForm() below) so admins notice a pending item instead of
+     * only finding out at offboarding. Only accessories actually checked
+     * ("informado") ever change state; an unchecked one is simply never
+     * mentioned, on either side.
+     *
+     * @return array<int,string> outstanding accessory keys
+     */
+    public static function getOutstandingAccessoriesForUser(int $users_id): array
+    {
+        if ($users_id <= 0) {
+            return [];
+        }
+
+        $outstanding = [];
+
+        foreach ((new self())->find(['users_id_recipient' => $users_id, 'is_deleted' => 0], 'date_generated ASC, id ASC') as $row) {
+            $checked = json_decode((string) ($row['accessories'] ?? ''), true);
+            if (!is_array($checked)) {
+                continue;
+            }
+
+            $is_return = self::isReturnForTemplate((int) $row['plugin_termodocs_templates_id']);
+            foreach ($checked as $key) {
+                if ($is_return) {
+                    unset($outstanding[$key]);
+                } else {
+                    $outstanding[$key] = true;
+                }
+            }
+        }
+
+        return array_keys($outstanding);
+    }
+
+    /**
      * @param array<int,array<string,mixed>> $items rows from
      *   Document_Item::getItemsForDocument()
      * @return array<int,array<string,mixed>>
@@ -699,6 +740,14 @@ class Document extends CommonDBTM
             'accessory_options'   => self::getAccessoryOptions(),
             'checked_accessories' => $this->getCheckedAccessories(),
             'accessory_done_label' => $is_return ? __('Devolvido', 'termodocs') : __('Entregue', 'termodocs'),
+            // "Se teve entrega, tem que ter devolução" - a warning, not a
+            // block: whatever this recipient's history still owes back,
+            // regardless of whether *this* document is the one that
+            // should resolve it.
+            'outstanding_accessory_labels' => array_map(
+                static fn(string $key): string => self::getAccessoryOptions()[$key] ?? $key,
+                self::getOutstandingAccessoriesForUser((int) $this->fields['users_id_recipient'])
+            ),
             // Appended to the preview iframe below (never stored back
             // into rendered_html) so the on-screen preview matches what
             // "Salvar observações" just baked into the downloadable PDF -
