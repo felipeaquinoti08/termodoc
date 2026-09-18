@@ -75,10 +75,12 @@
 
         {% if items is not empty %}
             <h5>{{ _n('Ativo vinculado', 'Ativos vinculados', 2, 'termodocs') }}</h5>
-            {% if is_admin %}
-                <form method="post" action="{{ config('root_doc') }}/plugins/termodocs/front/document.form.php">
-                    <input type="hidden" name="id" value="{{ item.getID() }}">
-                    {{ fields.csrfField() }}
+        {% endif %}
+        {% if is_admin %}
+            <form method="post" action="{{ config('root_doc') }}/plugins/termodocs/front/document.form.php">
+                <input type="hidden" name="id" value="{{ item.getID() }}">
+                {{ fields.csrfField() }}
+                {% if items is not empty %}
                     <table class="table table-sm w-auto mb-2">
                         <tbody>
                             {% for linked in items %}
@@ -96,16 +98,30 @@
                             {% endfor %}
                         </tbody>
                     </table>
-                    <div class="mb-2" style="max-width:500px">
-                        <label class="form-label">{{ __('Observações', 'termodocs') }}</label>
-                        <textarea name="notes" class="form-control" rows="3">{{ item.fields.notes }}</textarea>
-                    </div>
-                    <button type="submit" name="save_notes" class="btn btn-outline-primary btn-sm">
-                        <i class="ti ti-device-floppy"></i> {{ __('Salvar observações', 'termodocs') }}
-                    </button>
-                    <div class="form-text">{{ __('Ao salvar, o PDF é atualizado com a condição de cada equipamento e as observações.', 'termodocs') }}</div>
-                </form>
-            {% else %}
+                {% endif %}
+
+                <h5>{{ __('Acessórios (não inventariados)', 'termodocs') }}</h5>
+                <div class="mb-2 d-flex flex-wrap gap-3">
+                    {% for value, label in accessory_options %}
+                        <label class="form-check">
+                            <input type="checkbox" class="form-check-input" name="accessories[]" value="{{ value }}"
+                                {{ value in checked_accessories ? 'checked' : '' }}>
+                            <span class="form-check-label">{{ label }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+
+                <div class="mb-2" style="max-width:500px">
+                    <label class="form-label">{{ __('Observações', 'termodocs') }}</label>
+                    <textarea name="notes" class="form-control" rows="3">{{ item.fields.notes }}</textarea>
+                </div>
+                <button type="submit" name="save_notes" class="btn btn-outline-primary btn-sm">
+                    <i class="ti ti-device-floppy"></i> {{ __('Salvar observações', 'termodocs') }}
+                </button>
+                <div class="form-text">{{ __('Ao salvar, o PDF é atualizado com a condição de cada equipamento, os acessórios e as observações.', 'termodocs') }}</div>
+            </form>
+        {% else %}
+            {% if items is not empty %}
                 <ul>
                     {% for linked in items %}
                         <li>
@@ -116,9 +132,24 @@
                         </li>
                     {% endfor %}
                 </ul>
-                {% if item.fields.notes %}
-                    <p class="text-muted">{{ __('Observações', 'termodocs') }}: {{ item.fields.notes }}</p>
-                {% endif %}
+            {% endif %}
+
+            <h5>{{ __('Acessórios (não inventariados)', 'termodocs') }}</h5>
+            <ul>
+                {% for value, label in accessory_options %}
+                    <li>
+                        {{ label }}
+                        {% if value in checked_accessories %}
+                            <span class="badge bg-green-lt">{{ accessory_done_label }}</span>
+                        {% else %}
+                            <span class="badge bg-secondary-lt">{{ __('Não informado', 'termodocs') }}</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+
+            {% if item.fields.notes %}
+                <p class="text-muted">{{ __('Observações', 'termodocs') }}: {{ item.fields.notes }}</p>
             {% endif %}
         {% endif %}
 

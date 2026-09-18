@@ -145,10 +145,11 @@ if (isset($_POST['do_generate'])) {
     }
     Html::back();
 } elseif (isset($_POST['save_notes'])) {
-    // Purely operational annotation (condition on physical
-    // handover/return + a free-text note) - never touches
-    // rendered_html/content_hash (the frozen legal record) or the
-    // signature flow, so it's allowed regardless of status.
+    // Purely operational annotation (per-item condition, non-inventoried
+    // accessories checklist, and a free-text note, all filled in at
+    // physical handover/return) - never touches rendered_html/
+    // content_hash (the frozen legal record) or the signature flow, so
+    // it's allowed regardless of status.
     Session::checkRight(Document::$rightname, CREATE);
 
     $document = new Document();
@@ -156,9 +157,13 @@ if (isset($_POST['do_generate'])) {
         Html::back();
     }
 
+    $valid_accessories = array_keys(Document::getAccessoryOptions());
+    $checked_accessories = array_values(array_intersect((array) ($_POST['accessories'] ?? []), $valid_accessories));
+
     $document->update([
-        'id'    => $document->getID(),
-        'notes' => trim((string) ($_POST['notes'] ?? '')),
+        'id'          => $document->getID(),
+        'notes'       => trim((string) ($_POST['notes'] ?? '')),
+        'accessories' => json_encode($checked_accessories),
     ]);
 
     $valid_conditions = array_keys(Document::getConditionOptions());

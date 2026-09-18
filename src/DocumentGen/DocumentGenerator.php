@@ -162,6 +162,7 @@ class DocumentGenerator
         $rendered_footer = $has_template ? $renderer->render($template->fields['footer_html'] ?? '', $context) : '';
 
         $rendered_content .= Document::buildConditionsSectionHtml($document, $linked_items);
+        $rendered_content .= Document::buildAccessoriesSectionHtml($document);
 
         return (new PdfBuilder())->buildFromHtml(
             $rendered_header,

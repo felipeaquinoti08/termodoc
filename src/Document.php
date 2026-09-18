@@ -138,8 +138,7 @@ class Document extends CommonDBTM
      * (`<div class="td-signature-name" data-td-role="recipient|deliverer">`).
      * Nothing is persisted; call this wherever the document is *shown*,
      * never store the result back into `rendered_html`.
-     */
-    /**
+     *
      * $extra_content_html (e.g. buildConditionsSectionHtml()'s table) is
      * spliced in right before the closing `.td-footer` div, matching
      * exactly where DocumentGenerator::regeneratePdfWithConditions()
@@ -479,6 +478,73 @@ class Document extends CommonDBTM
     }
 
     /**
+     * Fixed catalog of small accessories that routinely go out/come
+     * back with real equipment but have no asset record of their own in
+     * GLPI (no serial/patrimônio to track), so they can't be linked via
+     * Document_Item like a Computer/Monitor/etc. - just a plain
+     * checklist of "was this one delivered/returned too", kept as a
+     * JSON array of keys on the document itself (`accessories` field).
+     *
+     * @return array<string,string> key => label
+     */
+    public static function getAccessoryOptions(): array
+    {
+        return [
+            'headset'          => __('Headset / Fone de ouvido', 'termodocs'),
+            'mouse'            => __('Mouse', 'termodocs'),
+            'teclado'          => __('Teclado', 'termodocs'),
+            'suporte_notebook' => __('Suporte para notebook', 'termodocs'),
+            'webcam'           => __('Webcam', 'termodocs'),
+        ];
+    }
+
+    /**
+     * @return array<int,string> the accessory keys checked on this document
+     */
+    public function getCheckedAccessories(): array
+    {
+        $decoded = json_decode((string) ($this->fields['accessories'] ?? '[]'), true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+        return array_values(array_intersect($decoded, array_keys(self::getAccessoryOptions())));
+    }
+
+    /**
+     * Same pattern as buildConditionsSectionHtml() just above - one
+     * source of truth for both the regenerated PDF
+     * (DocumentGenerator::regeneratePdfWithConditions()) and the web
+     * preview (showForm() below), direction-aware ("Entregue" for a
+     * delivery template, "Devolvido" for a return one).
+     */
+    public static function buildAccessoriesSectionHtml(self $document): string
+    {
+        $options = self::getAccessoryOptions();
+        $checked = $document->getCheckedAccessories();
+
+        $done_label = $document->isReturn() ? __('Devolvido', 'termodocs') : __('Entregue', 'termodocs');
+
+        $rows = '';
+        foreach ($options as $key => $label) {
+            $badge = in_array($key, $checked, true)
+                ? '<span style="display:inline-block;padding:2px 10px;border-radius:10px;background:#dcfce7;color:#166534;">' . htmlspecialchars($done_label) . '</span>'
+                : '<span style="display:inline-block;padding:2px 10px;border-radius:10px;background:#f3f4f6;color:#6b7280;">' . __('Não informado', 'termodocs') . '</span>';
+
+            $rows .= '<tr><td style="padding:6px 4px;border-bottom:1px solid #e5e7eb;">' . htmlspecialchars($label) . '</td>'
+                . '<td style="padding:6px 4px;border-bottom:1px solid #e5e7eb;">' . $badge . '</td></tr>';
+        }
+
+        return '<div class="td-accessories" style="margin-top:16px;">'
+            . '<h3>' . __('Acessórios (não inventariados)', 'termodocs') . '</h3>'
+            . '<table style="width:100%;border-collapse:collapse;font-size:10pt;">'
+            . '<thead><tr>'
+            . '<th style="text-align:left;border-bottom:1px solid #333;padding:4px;">' . __('Item', 'termodocs') . '</th>'
+            . '<th style="text-align:left;border-bottom:1px solid #333;padding:4px;">' . __('Status', 'termodocs') . '</th>'
+            . '</tr></thead><tbody>' . $rows . '</tbody></table>'
+            . '</div>';
+    }
+
+    /**
      * @param array<int,array<string,mixed>> $items rows from
      *   Document_Item::getItemsForDocument()
      * @return array<int,array<string,mixed>>
@@ -630,11 +696,16 @@ class Document extends CommonDBTM
             // useful to whoever administers the integration.
             'is_admin'            => Session::haveRight(self::$rightname, READ),
             'condition_options'   => self::getConditionOptions(),
+            'accessory_options'   => self::getAccessoryOptions(),
+            'checked_accessories' => $this->getCheckedAccessories(),
+            'accessory_done_label' => $is_return ? __('Devolvido', 'termodocs') : __('Entregue', 'termodocs'),
             // Appended to the preview iframe below (never stored back
             // into rendered_html) so the on-screen preview matches what
             // "Salvar observações" just baked into the downloadable PDF -
-            // same builder, see buildConditionsSectionHtml()'s own comment.
-            'conditions_preview_html' => empty($items) ? '' : self::buildConditionsSectionHtml($this, $items),
+            // same builders, see buildConditionsSectionHtml()/
+            // buildAccessoriesSectionHtml()'s own comments.
+            'conditions_preview_html' => (empty($items) ? '' : self::buildConditionsSectionHtml($this, $items))
+                . self::buildAccessoriesSectionHtml($this),
         ]);
 
         return true;

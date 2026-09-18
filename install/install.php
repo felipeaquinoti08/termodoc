@@ -68,6 +68,7 @@ function plugin_termodocs_install_run(): bool
             `date_generated` timestamp NULL DEFAULT NULL,
             `date_finalized` timestamp NULL DEFAULT NULL,
             `notes` text,
+            `accessories` text,
             `date_creation` timestamp NULL DEFAULT NULL,
             `date_mod` timestamp NULL DEFAULT NULL,
             PRIMARY KEY (`id`),
@@ -87,6 +88,7 @@ function plugin_termodocs_install_run(): bool
         migrate_termodocs_add_delivery_return_fields();
         migrate_termodocs_add_external_signature_fields();
         migrate_termodocs_add_condition_tracking();
+        migrate_termodocs_add_accessories_tracking();
     }
 
     if (!$DB->tableExists('glpi_plugin_termodocs_documents_items')) {
@@ -368,6 +370,23 @@ function migrate_termodocs_add_condition_tracking(): void
         if (!$DB->fieldExists('glpi_plugin_termodocs_documents_items', 'condition')) {
             $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents_items` ADD COLUMN `condition` varchar(10) DEFAULT NULL AFTER `item_snapshot`");
         }
+    }
+}
+
+/**
+ * Non-inventoried accessories (headset, mouse, keyboard, notebook
+ * stand, webcam) that go out/come back with the real inventoried
+ * items but have no asset record of their own in GLPI to link via
+ * glpi_plugin_termodocs_documents_items - just a fixed checklist kept
+ * as JSON on the document itself (see Document::getAccessoryOptions()/
+ * buildAccessoriesSectionHtml()). Safe to re-run.
+ */
+function migrate_termodocs_add_accessories_tracking(): void
+{
+    global $DB;
+
+    if ($DB->tableExists('glpi_plugin_termodocs_documents') && !$DB->fieldExists('glpi_plugin_termodocs_documents', 'accessories')) {
+        $DB->doQuery("ALTER TABLE `glpi_plugin_termodocs_documents` ADD COLUMN `accessories` text AFTER `notes`");
     }
 }
 
